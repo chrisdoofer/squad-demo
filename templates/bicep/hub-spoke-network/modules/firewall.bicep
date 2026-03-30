@@ -1,20 +1,20 @@
-@description('Prefix for resource names')
-param namePrefix string
+@description('Name of the hub network.')
+param hubName string
 
-@description('Azure region for resources')
+@description('Azure region for resource deployment.')
 param location string
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Tags to apply to all resources.')
+param tags object
 
-@description('Resource ID of the Azure Firewall subnet')
-param subnetId string
+@description('Resource ID of the AzureFirewallSubnet.')
+param firewallSubnetId string
 
-@description('Resource ID of the Log Analytics workspace for diagnostics')
-param logAnalyticsWorkspaceId string = ''
+@description('Resource ID of the Log Analytics workspace.')
+param logAnalyticsWorkspaceId string
 
 resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
-  name: '${namePrefix}-fw-pip'
+  name: '${hubName}-fw-pip'
   location: location
   tags: tags
   sku: {
@@ -27,7 +27,7 @@ resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
 }
 
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2024-01-01' = {
-  name: '${namePrefix}-fw-policy'
+  name: '${hubName}-fw-policy'
   location: location
   tags: tags
   properties: {
@@ -46,7 +46,7 @@ resource networkRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleColl
     ruleCollections: [
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        name: 'AllowSpokeToSpoke'
+        name: 'allow-network-rules'
         priority: 100
         action: {
           type: 'Allow'
@@ -54,18 +54,74 @@ resource networkRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleColl
         rules: [
           {
             ruleType: 'NetworkRule'
-            name: 'AllowPrivateTraffic'
+            name: 'allow-dns'
             ipProtocols: [
-              'Any'
+              'UDP'
             ]
             sourceAddresses: [
-              '10.0.0.0/8'
+              '*'
             ]
             destinationAddresses: [
-              '10.0.0.0/8'
+              '*'
             ]
             destinationPorts: [
+              '53'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'allow-https'
+            ipProtocols: [
+              'TCP'
+            ]
+            sourceAddresses: [
               '*'
+            ]
+            destinationAddresses: [
+              '*'
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+resource applicationRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-01-01' = {
+  parent: firewallPolicy
+  name: 'DefaultApplicationRuleCollectionGroup'
+  dependsOn: [
+    networkRuleCollectionGroup
+  ]
+  properties: {
+    priority: 300
+    ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'allow-application-rules'
+        priority: 100
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'ApplicationRule'
+            name: 'allow-microsoft'
+            sourceAddresses: [
+              '*'
+            ]
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              '*.microsoft.com'
+              '*.azure.com'
             ]
           }
         ]
@@ -75,7 +131,7 @@ resource networkRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleColl
 }
 
 resource firewall 'Microsoft.Network/azureFirewalls@2024-01-01' = {
-  name: '${namePrefix}-fw'
+  name: '${hubName}-fw'
   location: location
   tags: tags
   properties: {
@@ -91,7 +147,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2024-01-01' = {
         name: 'fw-ipconfig'
         properties: {
           subnet: {
-            id: subnetId
+            id: firewallSubnetId
           }
           publicIPAddress: {
             id: firewallPublicIp.id
@@ -102,11 +158,12 @@ resource firewall 'Microsoft.Network/azureFirewalls@2024-01-01' = {
   }
   dependsOn: [
     networkRuleCollectionGroup
+    applicationRuleCollectionGroup
   ]
 }
 
-resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
-  name: '${namePrefix}-fw-diag'
+resource firewallDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${hubName}-fw-diag'
   scope: firewall
   properties: {
     workspaceId: logAnalyticsWorkspaceId
@@ -125,14 +182,11 @@ resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-pr
   }
 }
 
-@description('Resource ID of the Azure Firewall')
-output firewallId string = firewall.id
-
-@description('Name of the Azure Firewall')
-output firewallName string = firewall.name
-
-@description('Private IP address of the Azure Firewall')
+@description('Private IP address of the Azure Firewall.')
 output firewallPrivateIp string = firewall.properties.ipConfigurations[0].properties.privateIPAddress
 
-@description('Public IP address of the Azure Firewall')
-output firewallPublicIp string = firewallPublicIp.properties.ipAddress
+@description('Resource ID of the Azure Firewall.')
+output firewallId string = firewall.id
+
+@description('Name of the Azure Firewall.')
+output firewallName string = firewall.name

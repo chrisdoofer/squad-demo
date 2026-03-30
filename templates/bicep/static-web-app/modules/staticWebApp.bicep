@@ -1,32 +1,39 @@
-@description('Name prefix for Static Web App resources.')
+@description('Name prefix for resources.')
 param appName string
 
 @description('Azure region for resource deployment.')
 param location string
 
-@description('GitHub repository URL for the Static Web App source.')
+@description('GitHub repository URL.')
 param repositoryUrl string
 
-@description('Tags to apply to all resources.')
-param tags object = {}
+@description('GitHub repository branch.')
+param repositoryBranch string
 
-var staticWebAppName = '${appName}-swa'
+@description('Deployment environment.')
+param environment string
+
+@description('Tags to apply to all resources.')
+param tags object
+
+var skuName = environment == 'prod' ? 'Standard' : 'Free'
+var skuTier = environment == 'prod' ? 'Standard' : 'Free'
 
 resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
-  name: staticWebAppName
+  name: '${appName}-swa'
   location: location
   tags: tags
   sku: {
-    name: 'Free'
-    tier: 'Free'
+    name: skuName
+    tier: skuTier
   }
   properties: {
     repositoryUrl: repositoryUrl
-    branch: 'main'
+    branch: repositoryBranch
     buildProperties: {
       appLocation: '/'
       apiLocation: 'api'
-      outputLocation: 'build'
+      outputLocation: 'dist'
     }
   }
 }

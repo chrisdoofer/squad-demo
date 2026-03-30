@@ -1,118 +1,115 @@
 targetScope = 'resourceGroup'
 
-@description('Name prefix for hub resources')
+// ──────────────────────────────────────────────
+// Hub-Spoke Network — Azure Hub-Spoke Topology
+// Reference: https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/hub-spoke
+// ──────────────────────────────────────────────
+
+@description('Name of the hub network. Used as a prefix for all resources.')
 param hubName string
 
-@description('Azure region for all resources')
-param location string = 'uksouth'
+@description('Azure region for resource deployment.')
+param location string = resourceGroup().location
 
-@description('Number of spoke VNets to deploy')
-@minValue(1)
-@maxValue(10)
+@description('Number of spoke virtual networks to deploy.')
 param spokeCount int = 2
 
-@description('Whether to deploy a VPN Gateway')
+@description('Enable VPN Gateway deployment in the hub.')
 param enableVpnGateway bool = false
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Enable Azure Bastion deployment in the hub.')
+param enableBastion bool = true
 
-// Spoke address space configuration: each spoke gets a /24 from the 10.x.0.0/16 range
-var spokeConfigs = [for i in range(0, spokeCount): {
-  addressPrefix: '10.${i + 1}.0.0/16'
-  subnetPrefix: '10.${i + 1}.0.0/24'
-}]
+@allowed([
+  'dev'
+  'staging'
+  'prod'
+])
+@description('Deployment environment.')
+param environment string = 'dev'
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: '${hubName}-law'
-  location: location
-  tags: tags
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
+var tags = {
+  environment: environment
+  project: hubName
 }
 
-module hubNetwork 'modules/hubNetwork.bicep' = {
-  name: 'hub-network-deployment'
+// ── Monitoring ──────────────────────────────
+module monitoring 'modules/monitoring.bicep' = {
+  name: '${hubName}-monitoring'
   params: {
-    namePrefix: hubName
+    hubName: hubName
     location: location
     tags: tags
   }
 }
 
-module spokeNetworks 'modules/spokeNetwork.bicep' = [for i in range(0, spokeCount): {
-  name: 'spoke-${i + 1}-network-deployment'
+// ── Hub Virtual Network ─────────────────────
+module hubVnet 'modules/hub-vnet.bicep' = {
+  name: '${hubName}-hub-vnet'
   params: {
-    namePrefix: hubName
-    spokeIndex: i + 1
+    hubName: hubName
     location: location
     tags: tags
-    spokeAddressPrefix: spokeConfigs[i].addressPrefix
-    defaultSubnetPrefix: spokeConfigs[i].subnetPrefix
   }
-}]
+}
 
+// ── Azure Firewall ──────────────────────────
 module firewall 'modules/firewall.bicep' = {
-  name: 'firewall-deployment'
+  name: '${hubName}-firewall'
   params: {
-    namePrefix: hubName
+    hubName: hubName
     location: location
     tags: tags
-    subnetId: hubNetwork.outputs.firewallSubnetId
-    logAnalyticsWorkspaceId: logAnalyticsWorkspace.id
+    firewallSubnetId: hubVnet.outputs.firewallSubnetId
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
   }
 }
 
-module bastion 'modules/bastion.bicep' = {
-  name: 'bastion-deployment'
+// ── Spoke Virtual Networks ──────────────────
+module spokeVnets 'modules/spoke-vnet.bicep' = [for i in range(1, spokeCount): {
+  name: '${hubName}-spoke-${i}'
   params: {
-    namePrefix: hubName
+    hubName: hubName
+    spokeIndex: i
     location: location
     tags: tags
-    subnetId: hubNetwork.outputs.bastionSubnetId
+    hubVnetName: hubVnet.outputs.hubVnetName
+    hubVnetId: hubVnet.outputs.hubVnetId
+    firewallPrivateIp: firewall.outputs.firewallPrivateIp
   }
-}
-
-module vpnGateway 'modules/vpnGateway.bicep' = if (enableVpnGateway) {
-  name: 'vpn-gateway-deployment'
-  params: {
-    namePrefix: hubName
-    location: location
-    tags: tags
-    subnetId: hubNetwork.outputs.gatewaySubnetId
-  }
-}
-
-module peerings 'modules/peering.bicep' = [for i in range(0, spokeCount): {
-  name: 'peering-${i + 1}-deployment'
-  params: {
-    hubVnetName: hubNetwork.outputs.hubVnetName
-    hubVnetId: hubNetwork.outputs.hubVnetId
-    spokeVnetName: spokeNetworks[i].outputs.spokeVnetName
-    spokeVnetId: spokeNetworks[i].outputs.spokeVnetId
-    allowGatewayTransit: enableVpnGateway
-    useRemoteGateways: enableVpnGateway
-  }
-  dependsOn: [
-    firewall
-  ]
 }]
 
-@description('Hub VNet resource ID')
-output hubVnetId string = hubNetwork.outputs.hubVnetId
+// ── Azure Bastion (optional) ────────────────
+module bastion 'modules/bastion.bicep' = if (enableBastion) {
+  name: '${hubName}-bastion'
+  params: {
+    hubName: hubName
+    location: location
+    tags: tags
+    bastionSubnetId: hubVnet.outputs.bastionSubnetId
+  }
+}
 
-@description('Firewall private IP address')
+// ── VPN Gateway (optional) ──────────────────
+module vpnGateway 'modules/vpn-gateway.bicep' = if (enableVpnGateway) {
+  name: '${hubName}-vpngw'
+  params: {
+    hubName: hubName
+    location: location
+    tags: tags
+    gatewaySubnetId: hubVnet.outputs.gatewaySubnetId
+  }
+}
+
+// ── Outputs ─────────────────────────────────
+@description('Private IP address of the Azure Firewall.')
 output firewallPrivateIp string = firewall.outputs.firewallPrivateIp
 
-@description('Azure Bastion resource ID')
-output bastionId string = bastion.outputs.bastionId
+@description('Name of the Azure Bastion host.')
+output bastionName string = enableBastion ? bastion!.outputs.bastionName : 'not-deployed'
 
-@description('Spoke VNet resource IDs')
-output spokeVnetIds array = [for i in range(0, spokeCount): spokeNetworks[i].outputs.spokeVnetId]
+@description('Resource ID of the hub Virtual Network.')
+output hubVnetId string = hubVnet.outputs.hubVnetId
 
-@description('VPN Gateway resource ID (empty if not deployed)')
-output vpnGatewayId string = enableVpnGateway ? vpnGateway!.outputs.vpnGatewayId : ''
+@description('Array of spoke Virtual Network resource IDs.')
+output spokeVnetIds array = [for i in range(0, spokeCount): spokeVnets[i].outputs.spokeVnetId]

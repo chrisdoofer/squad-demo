@@ -1,18 +1,22 @@
-@description('Name prefix for Cosmos DB resources.')
+@description('Name prefix for resources.')
 param appName string
 
 @description('Azure region for resource deployment.')
 param location string
 
 @description('Tags to apply to all resources.')
-param tags object = {}
+param tags object
 
-var cosmosAccountName = '${appName}-cosmos'
-var cosmosDatabaseName = '${appName}-db'
-var cosmosContainerName = 'items'
+@description('Name of the Cosmos DB database.')
+param databaseName string = 'appdb'
+
+@description('Name of the Cosmos DB container.')
+param containerName string = 'items'
+
+var uniqueSuffix = uniqueString(resourceGroup().id)
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
-  name: cosmosAccountName
+  name: '${appName}-cosmos-${uniqueSuffix}'
   location: location
   tags: tags
   kind: 'GlobalDocumentDB'
@@ -38,20 +42,20 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
 
 resource cosmosDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15' = {
   parent: cosmosAccount
-  name: cosmosDatabaseName
+  name: databaseName
   properties: {
     resource: {
-      id: cosmosDatabaseName
+      id: databaseName
     }
   }
 }
 
 resource cosmosContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: cosmosDatabase
-  name: cosmosContainerName
+  name: containerName
   properties: {
     resource: {
-      id: cosmosContainerName
+      id: containerName
       partitionKey: {
         paths: [
           '/id'
@@ -66,13 +70,14 @@ resource cosmosContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/con
 output cosmosAccountId string = cosmosAccount.id
 
 @description('Cosmos DB account endpoint URI.')
-output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
+output cosmosDbEndpoint string = cosmosAccount.properties.documentEndpoint
 
 @description('Name of the Cosmos DB account.')
 output cosmosAccountName string = cosmosAccount.name
 
+@description('Primary connection string for the Cosmos DB account.')
+#disable-next-line outputs-should-not-contain-secrets
+output cosmosConnectionString string = cosmosAccount.listConnectionStrings().connectionStrings[0].connectionString
+
 @description('Name of the Cosmos DB database.')
 output cosmosDatabaseName string = cosmosDatabase.name
-
-@description('Name of the Cosmos DB container.')
-output cosmosContainerName string = cosmosContainer.name

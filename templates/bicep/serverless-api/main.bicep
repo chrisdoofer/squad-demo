@@ -1,65 +1,82 @@
 targetScope = 'resourceGroup'
 
-@description('Name prefix for all resources')
+// ──────────────────────────────────────────────
+// Serverless API — Azure Functions + API Management + Cosmos DB
+// Reference: https://learn.microsoft.com/en-us/azure/architecture/serverless/web-app
+// ──────────────────────────────────────────────
+
+@description('Name of the application. Used as a prefix for all resources.')
 param appName string
 
-@description('Azure region for all resources')
+@description('Azure region for resource deployment.')
 param location string = 'uksouth'
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@allowed([
+  'dev'
+  'staging'
+  'prod'
+])
+@description('Deployment environment.')
+param environment string = 'dev'
 
+var tags = {
+  environment: environment
+  project: appName
+}
+
+// ── Monitoring ──────────────────────────────
 module monitoring 'modules/monitoring.bicep' = {
-  name: 'monitoring-deployment'
+  name: '${appName}-monitoring'
   params: {
-    namePrefix: appName
+    appName: appName
     location: location
     tags: tags
   }
 }
 
+// ── Cosmos DB ───────────────────────────────
 module cosmosDb 'modules/cosmosDb.bicep' = {
-  name: 'cosmosdb-deployment'
+  name: '${appName}-cosmos'
   params: {
-    namePrefix: appName
+    appName: appName
     location: location
     tags: tags
   }
 }
 
+// ── Azure Functions ─────────────────────────
 module functions 'modules/functions.bicep' = {
-  name: 'functions-deployment'
+  name: '${appName}-functions'
   params: {
-    namePrefix: appName
+    appName: appName
     location: location
     tags: tags
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
-    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
-    cosmosDbEndpoint: cosmosDb.outputs.cosmosDbEndpoint
-    cosmosDbAccountName: cosmosDb.outputs.cosmosDbAccountName
+    cosmosDbConnectionString: cosmosDb.outputs.cosmosDbConnectionString
   }
 }
 
+// ── API Management ──────────────────────────
 module apiManagement 'modules/apiManagement.bicep' = {
-  name: 'apim-deployment'
+  name: '${appName}-apim'
   params: {
-    namePrefix: appName
+    appName: appName
     location: location
     tags: tags
     functionAppDefaultHostName: functions.outputs.functionAppDefaultHostName
+    functionAppResourceId: functions.outputs.functionAppId
     appInsightsId: monitoring.outputs.appInsightsId
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
   }
 }
 
-@description('Function App default hostname')
-output functionAppHostName string = functions.outputs.functionAppDefaultHostName
+// ── Outputs ─────────────────────────────────
+@description('URL of the deployed Function App.')
+output functionAppUrl string = 'https://${functions.outputs.functionAppDefaultHostName}'
 
-@description('API Management gateway URL')
+@description('Gateway URL of the API Management instance.')
 output apimGatewayUrl string = apiManagement.outputs.apimGatewayUrl
 
-@description('Cosmos DB endpoint')
+@description('Cosmos DB account endpoint URI.')
 output cosmosDbEndpoint string = cosmosDb.outputs.cosmosDbEndpoint
-
-@description('Application Insights resource ID')
-output appInsightsId string = monitoring.outputs.appInsightsId

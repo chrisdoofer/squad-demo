@@ -1,20 +1,22 @@
-@description('Prefix for resource names')
-param namePrefix string
+@description('Name prefix for resources.')
+param appName string
 
-@description('Azure region for resources')
+@description('Azure region for resource deployment.')
 param location string
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Tags to apply to all resources.')
+param tags object
 
-@description('Name of the Cosmos DB database')
+@description('Name of the Cosmos DB database.')
 param databaseName string = 'appdb'
 
-@description('Name of the Cosmos DB container')
+@description('Name of the Cosmos DB container.')
 param containerName string = 'items'
 
+var uniqueSuffix = uniqueString(resourceGroup().id)
+
 resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
-  name: '${namePrefix}-cosmos'
+  name: '${appName}-cosmos-${uniqueSuffix}'
   location: location
   tags: tags
   kind: 'GlobalDocumentDB'
@@ -73,14 +75,18 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
   }
 }
 
-@description('Resource ID of the Cosmos DB account')
+@description('Resource ID of the Cosmos DB account.')
 output cosmosDbAccountId string = cosmosDbAccount.id
 
-@description('Name of the Cosmos DB account')
+@description('Name of the Cosmos DB account.')
 output cosmosDbAccountName string = cosmosDbAccount.name
 
-@description('Endpoint URI of the Cosmos DB account')
+@description('Endpoint URI of the Cosmos DB account.')
 output cosmosDbEndpoint string = cosmosDbAccount.properties.documentEndpoint
 
-@description('Name of the database')
+@description('Primary connection string for the Cosmos DB account.')
+#disable-next-line outputs-should-not-contain-secrets
+output cosmosDbConnectionString string = cosmosDbAccount.listConnectionStrings().connectionStrings[0].connectionString
+
+@description('Name of the Cosmos DB database.')
 output databaseName string = database.name

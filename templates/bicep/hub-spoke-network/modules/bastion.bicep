@@ -1,17 +1,17 @@
-@description('Prefix for resource names')
-param namePrefix string
+@description('Name of the hub network.')
+param hubName string
 
-@description('Azure region for resources')
+@description('Azure region for resource deployment.')
 param location string
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Tags to apply to all resources.')
+param tags object
 
-@description('Resource ID of the Azure Bastion subnet')
-param subnetId string
+@description('Resource ID of the AzureBastionSubnet.')
+param bastionSubnetId string
 
 resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
-  name: '${namePrefix}-bastion-pip'
+  name: '${hubName}-bastion-pip'
   location: location
   tags: tags
   sku: {
@@ -24,11 +24,11 @@ resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
 }
 
 resource bastion 'Microsoft.Network/bastionHosts@2024-01-01' = {
-  name: '${namePrefix}-bastion'
+  name: '${hubName}-bastion'
   location: location
   tags: tags
   sku: {
-    name: 'Basic'
+    name: 'Standard'
   }
   properties: {
     ipConfigurations: [
@@ -36,7 +36,7 @@ resource bastion 'Microsoft.Network/bastionHosts@2024-01-01' = {
         name: 'bastion-ipconfig'
         properties: {
           subnet: {
-            id: subnetId
+            id: bastionSubnetId
           }
           publicIPAddress: {
             id: bastionPublicIp.id
@@ -47,8 +47,8 @@ resource bastion 'Microsoft.Network/bastionHosts@2024-01-01' = {
   }
 }
 
-@description('Resource ID of Azure Bastion')
+@description('Resource ID of the Azure Bastion.')
 output bastionId string = bastion.id
 
-@description('Name of Azure Bastion')
+@description('Name of the Azure Bastion.')
 output bastionName string = bastion.name
