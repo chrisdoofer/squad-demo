@@ -1,0 +1,103 @@
+{
+  "templates": [
+    {
+      "id": "basic-web-app",
+      "name": "Basic Web App",
+      "description": "A basic App Service architecture for learning and proof-of-concept. Includes App Service, SQL Database, and Application Insights.",
+      "category": "Web",
+      "complexity": "beginner",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/web-apps/app-service/architectures/basic-web-app",
+      "services": ["App Service", "SQL Database", "Application Insights", "Entra ID"],
+      "bicepPath": "templates/bicep/basic-web-app/main.bicep",
+      "workflowPath": "templates/workflows/basic-web-app/deploy.yml",
+      "parameters": [
+        { "name": "appName", "type": "string", "description": "Name of the web application", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" },
+        { "name": "sqlAdminLogin", "type": "string", "description": "SQL Server admin username", "required": true },
+        { "name": "sqlAdminPassword", "type": "secureString", "description": "SQL Server admin password", "required": true }
+      ]
+    },
+    {
+      "id": "baseline-web-app",
+      "name": "Baseline Zone-Redundant Web App",
+      "description": "Production-ready App Service with Application Gateway, WAF, VNet integration, Private Link, Key Vault, and zone redundancy.",
+      "category": "Web",
+      "complexity": "advanced",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/web-apps/app-service/architectures/baseline-zone-redundant",
+      "services": ["Application Gateway", "WAF", "App Service", "SQL Database", "Key Vault", "Virtual Network", "Private Link"],
+      "bicepPath": "templates/bicep/baseline-web-app/main.bicep",
+      "workflowPath": "templates/workflows/baseline-web-app/deploy.yml",
+      "parameters": [
+        { "name": "appName", "type": "string", "description": "Name of the web application", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" },
+        { "name": "sqlAdminLogin", "type": "string", "description": "SQL Server admin username", "required": true },
+        { "name": "sqlAdminPassword", "type": "secureString", "description": "SQL Server admin password", "required": true }
+      ]
+    },
+    {
+      "id": "aks-microservices",
+      "name": "Microservices on AKS",
+      "description": "Azure Kubernetes Service with Container Registry, Service Bus, Cosmos DB, and Application Insights for microservices workloads.",
+      "category": "Containers",
+      "complexity": "advanced",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/containers/aks-microservices/aks-microservices",
+      "services": ["AKS", "Container Registry", "Service Bus", "Cosmos DB", "Application Insights", "Virtual Network"],
+      "bicepPath": "templates/bicep/aks-microservices/main.bicep",
+      "workflowPath": "templates/workflows/aks-microservices/deploy.yml",
+      "parameters": [
+        { "name": "clusterName", "type": "string", "description": "Name of the AKS cluster", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" },
+        { "name": "nodeCount", "type": "int", "description": "Number of agent nodes", "default": 3 },
+        { "name": "nodeVmSize", "type": "string", "description": "VM size for nodes", "default": "Standard_D4s_v3" }
+      ]
+    },
+    {
+      "id": "serverless-api",
+      "name": "Serverless API",
+      "description": "Serverless architecture with Azure Functions, API Management, Cosmos DB, and Application Insights.",
+      "category": "Serverless",
+      "complexity": "intermediate",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/web-apps/serverless/architectures/web-app",
+      "services": ["Azure Functions", "API Management", "Cosmos DB", "Storage Account", "Application Insights"],
+      "bicepPath": "templates/bicep/serverless-api/main.bicep",
+      "workflowPath": "templates/workflows/serverless-api/deploy.yml",
+      "parameters": [
+        { "name": "appName", "type": "string", "description": "Name prefix for all resources", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" }
+      ]
+    },
+    {
+      "id": "static-web-app",
+      "name": "Static Web App with API",
+      "description": "Azure Static Web Apps with a linked Functions backend and Cosmos DB for data storage.",
+      "category": "Web",
+      "complexity": "beginner",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/guide/web/static-web-apps-content-overview",
+      "services": ["Static Web Apps", "Azure Functions", "Cosmos DB"],
+      "bicepPath": "templates/bicep/static-web-app/main.bicep",
+      "workflowPath": "templates/workflows/static-web-app/deploy.yml",
+      "parameters": [
+        { "name": "appName", "type": "string", "description": "Name of the Static Web App", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" },
+        { "name": "repositoryUrl", "type": "string", "description": "GitHub repository URL", "required": true }
+      ]
+    },
+    {
+      "id": "hub-spoke-network",
+      "name": "Hub-Spoke Network",
+      "description": "Hub-spoke network topology with Azure Firewall, Bastion, VPN Gateway, and peered spoke VNets.",
+      "category": "Networking",
+      "complexity": "advanced",
+      "sourceUrl": "https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/hub-spoke",
+      "services": ["Virtual Network", "Azure Firewall", "Bastion", "VPN Gateway", "NSG"],
+      "bicepPath": "templates/bicep/hub-spoke-network/main.bicep",
+      "workflowPath": "templates/workflows/hub-spoke-network/deploy.yml",
+      "parameters": [
+        { "name": "hubName", "type": "string", "description": "Name prefix for hub resources", "required": true },
+        { "name": "location", "type": "string", "description": "Azure region", "default": "uksouth" },
+        { "name": "spokeCount", "type": "int", "description": "Number of spoke VNets", "default": 2 },
+        { "name": "enableVpnGateway", "type": "bool", "description": "Deploy VPN Gateway", "default": false }
+      ]
+    }
+  ]
+}
