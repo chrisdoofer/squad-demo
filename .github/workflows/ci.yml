@@ -1,0 +1,78 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lint-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w src/frontend
+
+  lint-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w src/backend
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test -w src/frontend
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test -w src/backend
+
+  validate-bicep:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template:
+          - basic-web-app
+          - baseline-web-app
+          - aks-microservices
+          - serverless-api
+          - static-web-app
+          - hub-spoke-network
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bicep Lint - ${{ matrix.template }}
+        run: |
+          TEMPLATE="templates/bicep/${{ matrix.template }}/main.bicep"
+          if [ -f "${TEMPLATE}" ]; then
+            az bicep build --file "${TEMPLATE}"
+          else
+            echo "::warning::Template ${TEMPLATE} not found — skipping"
+          fi

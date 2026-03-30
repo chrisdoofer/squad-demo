@@ -1,0 +1,91 @@
+name: Deploy Bicep Template
+on:
+  workflow_call:
+    inputs:
+      template-path:
+        required: true
+        type: string
+        description: 'Path to the main.bicep file'
+      parameters-file:
+        required: false
+        type: string
+        default: ''
+        description: 'Path to the parameters file (optional)'
+      parameters:
+        required: false
+        type: string
+        default: ''
+        description: 'Inline deployment parameters (optional)'
+      resource-group:
+        required: true
+        type: string
+      location:
+        required: false
+        type: string
+        default: 'uksouth'
+      deployment-name:
+        required: false
+        type: string
+        default: ''
+        description: 'Custom deployment name (auto-generated if empty)'
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+    outputs:
+      deployment-name:
+        description: 'Name of the completed deployment'
+        value: ${{ jobs.deploy.outputs.deployment-name }}
+      resource-group:
+        description: 'Resource group the deployment targeted'
+        value: ${{ jobs.deploy.outputs.resource-group }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployment-name: ${{ steps.deploy.outputs.deployment-name }}
+      resource-group: ${{ inputs.resource-group }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Generate deployment name
+        id: name
+        run: |
+          if [ -n "${{ inputs.deployment-name }}" ]; then
+            echo "name=${{ inputs.deployment-name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=deploy-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Bicep template
+        id: deploy
+        run: |
+          DEPLOY_NAME="${{ steps.name.outputs.name }}"
+
+          DEPLOY_CMD="az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file ${{ inputs.template-path }} \
+            --name ${DEPLOY_NAME}"
+
+          if [ -n "${{ inputs.parameters-file }}" ]; then
+            DEPLOY_CMD="${DEPLOY_CMD} --parameters @${{ inputs.parameters-file }}"
+          fi
+
+          if [ -n "${{ inputs.parameters }}" ]; then
+            DEPLOY_CMD="${DEPLOY_CMD} --parameters ${{ inputs.parameters }}"
+          fi
+
+          eval ${DEPLOY_CMD}
+
+          echo "deployment-name=${DEPLOY_NAME}" >> "$GITHUB_OUTPUT"

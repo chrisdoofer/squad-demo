@@ -1,0 +1,151 @@
+name: Deploy AKS Microservices
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      resource-group:
+        description: 'Azure Resource Group name'
+        required: true
+        type: string
+      location:
+        description: 'Azure region'
+        required: false
+        type: string
+        default: 'uksouth'
+      clusterName:
+        description: 'AKS cluster name'
+        required: true
+        type: string
+      nodeCount:
+        description: 'Number of nodes in the default node pool'
+        required: false
+        type: string
+        default: '3'
+      nodeVmSize:
+        description: 'VM size for the default node pool'
+        required: false
+        type: string
+        default: 'Standard_D4s_v3'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable-bicep-validate.yml
+    with:
+      template-path: templates/bicep/aks-microservices/main.bicep
+      resource-group: ${{ inputs.resource-group }}
+    secrets: inherit
+
+  deploy-dev:
+    needs: validate
+    if: inputs.environment == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy AKS cluster
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/aks-microservices/main.bicep \
+            --parameters \
+              clusterName=${{ inputs.clusterName }} \
+              location=${{ inputs.location }} \
+              nodeCount=${{ inputs.nodeCount }} \
+              nodeVmSize=${{ inputs.nodeVmSize }}
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ inputs.resource-group }} \
+            --name ${{ inputs.clusterName }} \
+            --overwrite-existing
+      - name: Verify cluster health
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+          kubectl cluster-info
+
+  deploy-staging:
+    needs: validate
+    if: inputs.environment == 'staging'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy AKS cluster
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/aks-microservices/main.bicep \
+            --parameters \
+              clusterName=${{ inputs.clusterName }} \
+              location=${{ inputs.location }} \
+              nodeCount=${{ inputs.nodeCount }} \
+              nodeVmSize=${{ inputs.nodeVmSize }}
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ inputs.resource-group }} \
+            --name ${{ inputs.clusterName }} \
+            --overwrite-existing
+      - name: Verify cluster health
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+          kubectl cluster-info
+
+  deploy-prod:
+    needs: validate
+    if: inputs.environment == 'prod'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy AKS cluster
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/aks-microservices/main.bicep \
+            --parameters \
+              clusterName=${{ inputs.clusterName }} \
+              location=${{ inputs.location }} \
+              nodeCount=${{ inputs.nodeCount }} \
+              nodeVmSize=${{ inputs.nodeVmSize }}
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ inputs.resource-group }} \
+            --name ${{ inputs.clusterName }} \
+            --overwrite-existing
+      - name: Verify cluster health
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+          kubectl cluster-info

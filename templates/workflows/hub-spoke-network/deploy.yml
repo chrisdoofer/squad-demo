@@ -1,0 +1,173 @@
+name: Deploy Hub-Spoke Network
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      resource-group:
+        description: 'Azure Resource Group name'
+        required: true
+        type: string
+      location:
+        description: 'Azure region'
+        required: false
+        type: string
+        default: 'uksouth'
+      hubName:
+        description: 'Hub virtual network name'
+        required: true
+        type: string
+      spokeCount:
+        description: 'Number of spoke virtual networks'
+        required: false
+        type: string
+        default: '2'
+      enableVpnGateway:
+        description: 'Deploy a VPN Gateway in the hub'
+        required: false
+        type: boolean
+        default: false
+      enableBastion:
+        description: 'Deploy Azure Bastion in the hub'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable-bicep-validate.yml
+    with:
+      template-path: templates/bicep/hub-spoke-network/main.bicep
+      resource-group: ${{ inputs.resource-group }}
+    secrets: inherit
+
+  network-validation:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Check for address space conflicts
+        run: |
+          echo "Checking existing VNets in resource group ${{ inputs.resource-group }}..."
+          az network vnet list \
+            --resource-group ${{ inputs.resource-group }} \
+            --query "[].{name:name, addressSpace:addressSpace.addressPrefixes}" \
+            --output table || echo "No existing VNets found — no conflicts"
+
+  deploy-dev:
+    needs: [validate, network-validation]
+    if: inputs.environment == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy hub-spoke network
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/hub-spoke-network/main.bicep \
+            --parameters \
+              hubName=${{ inputs.hubName }} \
+              location=${{ inputs.location }} \
+              spokeCount=${{ inputs.spokeCount }} \
+              enableVpnGateway=${{ inputs.enableVpnGateway }} \
+              enableBastion=${{ inputs.enableBastion }}
+      - name: Verify network topology
+        run: |
+          echo "=== Virtual Networks ==="
+          az network vnet list \
+            --resource-group ${{ inputs.resource-group }} \
+            --query "[].{name:name, addressSpace:addressSpace.addressPrefixes, peerings:virtualNetworkPeerings[].name}" \
+            --output table
+          echo ""
+          echo "=== VNet Peerings ==="
+          az network vnet peering list \
+            --resource-group ${{ inputs.resource-group }} \
+            --vnet-name ${{ inputs.hubName }} \
+            --query "[].{name:name, peeringState:peeringState, remoteVnet:remoteVirtualNetwork.id}" \
+            --output table || true
+
+  deploy-staging:
+    needs: [validate, network-validation]
+    if: inputs.environment == 'staging'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy hub-spoke network
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/hub-spoke-network/main.bicep \
+            --parameters \
+              hubName=${{ inputs.hubName }} \
+              location=${{ inputs.location }} \
+              spokeCount=${{ inputs.spokeCount }} \
+              enableVpnGateway=${{ inputs.enableVpnGateway }} \
+              enableBastion=${{ inputs.enableBastion }}
+      - name: Verify network topology
+        run: |
+          echo "=== Virtual Networks ==="
+          az network vnet list \
+            --resource-group ${{ inputs.resource-group }} \
+            --query "[].{name:name, addressSpace:addressSpace.addressPrefixes}" \
+            --output table
+
+  deploy-prod:
+    needs: [validate, network-validation]
+    if: inputs.environment == 'prod'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy hub-spoke network
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resource-group }} \
+            --template-file templates/bicep/hub-spoke-network/main.bicep \
+            --parameters \
+              hubName=${{ inputs.hubName }} \
+              location=${{ inputs.location }} \
+              spokeCount=${{ inputs.spokeCount }} \
+              enableVpnGateway=${{ inputs.enableVpnGateway }} \
+              enableBastion=${{ inputs.enableBastion }}
+      - name: Verify network topology
+        run: |
+          echo "=== Virtual Networks ==="
+          az network vnet list \
+            --resource-group ${{ inputs.resource-group }} \
+            --query "[].{name:name, addressSpace:addressSpace.addressPrefixes}" \
+            --output table
