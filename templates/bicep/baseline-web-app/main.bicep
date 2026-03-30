@@ -1,121 +1,127 @@
 targetScope = 'resourceGroup'
 
-// ──────────────────────────────────────────────────────
-// Baseline Zone-Redundant Web App
-// AppGw + WAF ➜ App Service (VNet) ➜ SQL (Private Link) + Key Vault
-// Reference: https://learn.microsoft.com/en-us/azure/architecture/web-apps/app-service/architectures/baseline-zone-redundant
-// ──────────────────────────────────────────────────────
-
-@description('Name of the web application. Used as a prefix for all resources.')
+@description('Name of the web application (used as prefix for all resources)')
 param appName string
 
-@description('Azure region for resource deployment.')
-param location string = 'uksouth'
+@description('Azure region for all resources')
+param location string = resourceGroup().location
 
-@description('SQL Server administrator login name.')
+@description('SQL Server administrator login')
 param sqlAdminLogin string
 
+@description('SQL Server administrator password')
 @secure()
-@description('SQL Server administrator password.')
 param sqlAdminPassword string
 
-@description('Tags to apply to all resources.')
-param tags object = {}
+@description('Environment name')
+@allowed([
+  'dev'
+  'staging'
+  'prod'
+])
+param environment string = 'dev'
 
-// ── Monitoring ──────────────────────────────
-module monitoring 'modules/monitoring.bicep' = {
-  name: '${appName}-monitoring'
-  params: {
-    appName: appName
-    location: location
-    tags: tags
-  }
+@description('Base64-encoded PFX certificate data for Application Gateway HTTPS listener')
+@secure()
+param sslCertificateData string
+
+@description('Password for the PFX certificate')
+@secure()
+param sslCertificatePassword string
+
+var tags = {
+  environment: environment
+  project: appName
 }
 
-// ── Networking ──────────────────────────────
+var suffix = uniqueString(resourceGroup().id)
+var keyVaultName = take('kv-${appName}-${suffix}', 24)
+
 module network 'modules/network.bicep' = {
-  name: '${appName}-network'
+  name: 'network'
   params: {
-    appName: appName
     location: location
+    appName: appName
+    environment: environment
     tags: tags
   }
 }
 
-// ── SQL Database (Private Link) ─────────────
-module sql 'modules/sqlDatabase.bicep' = {
-  name: '${appName}-sql'
+module privateDns 'modules/private-dns.bicep' = {
+  name: 'privateDns'
   params: {
-    appName: appName
-    location: location
-    sqlAdminLogin: sqlAdminLogin
-    sqlAdminPassword: sqlAdminPassword
-    privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
+    tags: tags
     vnetId: network.outputs.vnetId
+  }
+}
+
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
+  params: {
+    location: location
+    appName: appName
+    environment: environment
     tags: tags
   }
 }
 
-// ── App Service (VNet integrated) ───────────
-module appService 'modules/appService.bicep' = {
-  name: '${appName}-appservice'
+module appService 'modules/app-service.bicep' = {
+  name: 'appService'
   params: {
-    appName: appName
     location: location
-    subnetId: network.outputs.appSubnetId
+    appName: appName
+    environment: environment
+    tags: tags
+    appSubnetId: network.outputs.appSubnetId
+    privateEndpointsSubnetId: network.outputs.privateEndpointsSubnetId
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
-    tags: tags
+    keyVaultName: keyVaultName
+    privateDnsZoneId: privateDns.outputs.webAppsDnsZoneId
   }
 }
 
-// ── Key Vault (Private Link) ────────────────
-module keyVault 'modules/keyVault.bicep' = {
-  name: '${appName}-keyvault'
+module sql 'modules/sql.bicep' = {
+  name: 'sql'
   params: {
-    appName: appName
     location: location
-    webAppPrincipalId: appService.outputs.webAppPrincipalId
-    sqlServerFqdn: sql.outputs.sqlServerFqdn
+    appName: appName
+    environment: environment
+    tags: tags
+    privateEndpointsSubnetId: network.outputs.privateEndpointsSubnetId
     sqlAdminLogin: sqlAdminLogin
     sqlAdminPassword: sqlAdminPassword
-    sqlDatabaseName: sql.outputs.sqlDatabaseName
-    privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
-    vnetId: network.outputs.vnetId
-    tags: tags
+    privateDnsZoneId: privateDns.outputs.sqlDnsZoneId
   }
 }
 
-// ── Application Gateway + WAF ───────────────
-module appGateway 'modules/appGateway.bicep' = {
-  name: '${appName}-appgateway'
+module keyVault 'modules/keyvault.bicep' = {
+  name: 'keyVault'
   params: {
-    appName: appName
     location: location
-    subnetId: network.outputs.appGwSubnetId
-    backendFqdn: appService.outputs.webAppHostName
-    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
     tags: tags
+    keyVaultName: keyVaultName
+    privateEndpointsSubnetId: network.outputs.privateEndpointsSubnetId
+    appServicePrincipalId: appService.outputs.appServicePrincipalId
+    sqlConnectionString: 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.sqlDatabaseName};Persist Security Info=False;User ID=${sqlAdminLogin};Password=${sqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+    privateDnsZoneId: privateDns.outputs.keyVaultDnsZoneId
   }
 }
 
-// ── Outputs ─────────────────────────────────
-@description('Public IP address of the Application Gateway.')
-output appGatewayPublicIp string = appGateway.outputs.publicIpAddress
+module appGateway 'modules/app-gateway.bicep' = {
+  name: 'appGateway'
+  params: {
+    location: location
+    appName: appName
+    environment: environment
+    tags: tags
+    subnetId: network.outputs.appGatewaySubnetId
+    appServiceHostName: appService.outputs.appServiceDefaultHostName
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
+    sslCertificateData: sslCertificateData
+    sslCertificatePassword: sslCertificatePassword
+  }
+}
 
-@description('Default hostname of the Web App.')
-output webAppHostName string = appService.outputs.webAppHostName
-
-@description('Resource ID of the Web App.')
-output webAppId string = appService.outputs.webAppId
-
-@description('Resource ID of the SQL Server.')
-output sqlServerId string = sql.outputs.sqlServerId
-
-@description('Resource ID of the Key Vault.')
-output keyVaultId string = keyVault.outputs.keyVaultId
-
-@description('Resource ID of the Virtual Network.')
-output vnetId string = network.outputs.vnetId
-
-@description('Resource ID of the Application Insights instance.')
-output appInsightsId string = monitoring.outputs.appInsightsId
+output appGatewayPublicIp string = appGateway.outputs.appGatewayPublicIp
+output appServiceName string = appService.outputs.appServiceName
+output keyVaultName string = keyVault.outputs.keyVaultName

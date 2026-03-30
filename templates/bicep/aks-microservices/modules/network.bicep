@@ -1,56 +1,69 @@
-@description('Prefix for resource names')
-param namePrefix string
-
-@description('Azure region for resources')
+@description('Azure region for all resources')
 param location string
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Cluster name prefix')
+param clusterName string
 
-@description('Address space for the virtual network')
-param vnetAddressPrefix string = '10.0.0.0/16'
+@description('Environment name')
+param environment string
 
-@description('Address prefix for the AKS subnet')
-param aksSubnetPrefix string = '10.0.0.0/22'
+@description('Resource tags')
+param tags object
 
-@description('Address prefix for the services subnet')
-param servicesSubnetPrefix string = '10.0.4.0/24'
+var vnetName = 'vnet-${clusterName}-${environment}'
+
+resource nsgAks 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: 'nsg-aks-${environment}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: []
+  }
+}
+
+resource nsgServices 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: 'nsg-services-${environment}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: []
+  }
+}
 
 resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
-  name: '${namePrefix}-vnet'
+  name: vnetName
   location: location
   tags: tags
   properties: {
     addressSpace: {
       addressPrefixes: [
-        vnetAddressPrefix
+        '10.0.0.0/12'
       ]
     }
     subnets: [
       {
-        name: 'aks-subnet'
+        name: 'snet-aks'
         properties: {
-          addressPrefix: aksSubnetPrefix
+          addressPrefix: '10.0.0.0/16'
+          networkSecurityGroup: {
+            id: nsgAks.id
+          }
         }
       }
       {
-        name: 'services-subnet'
+        name: 'snet-services'
         properties: {
-          addressPrefix: servicesSubnetPrefix
+          addressPrefix: '10.1.0.0/24'
+          networkSecurityGroup: {
+            id: nsgServices.id
+          }
         }
       }
     ]
   }
 }
 
-@description('Resource ID of the virtual network')
 output vnetId string = vnet.id
-
-@description('Name of the virtual network')
 output vnetName string = vnet.name
-
-@description('Resource ID of the AKS subnet')
 output aksSubnetId string = vnet.properties.subnets[0].id
-
-@description('Resource ID of the services subnet')
 output servicesSubnetId string = vnet.properties.subnets[1].id

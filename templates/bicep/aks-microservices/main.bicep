@@ -1,90 +1,98 @@
 targetScope = 'resourceGroup'
 
-@description('Name of the AKS cluster')
+@description('Name of the AKS cluster (used as prefix for all resources)')
 param clusterName string
 
 @description('Azure region for all resources')
-param location string = 'uksouth'
+param location string = resourceGroup().location
 
-@description('Number of agent nodes in the system pool')
+@description('Initial node count for the user node pool')
+@minValue(1)
+@maxValue(10)
 param nodeCount int = 3
 
-@description('VM size for agent nodes')
+@description('VM size for AKS node pools')
 param nodeVmSize string = 'Standard_D4s_v3'
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Environment name')
+@allowed([
+  'dev'
+  'staging'
+  'prod'
+])
+param environment string = 'dev'
 
-module monitoring 'modules/monitoring.bicep' = {
-  name: 'monitoring-deployment'
+var tags = {
+  environment: environment
+  project: clusterName
+}
+
+module network 'modules/network.bicep' = {
+  name: 'network'
   params: {
-    namePrefix: clusterName
     location: location
+    clusterName: clusterName
+    environment: environment
     tags: tags
   }
 }
 
-module network 'modules/network.bicep' = {
-  name: 'network-deployment'
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
   params: {
-    namePrefix: clusterName
     location: location
+    clusterName: clusterName
+    environment: environment
     tags: tags
   }
 }
 
 module aks 'modules/aks.bicep' = {
-  name: 'aks-deployment'
+  name: 'aks'
   params: {
-    clusterName: clusterName
     location: location
+    clusterName: clusterName
+    environment: environment
     tags: tags
+    aksSubnetId: network.outputs.aksSubnetId
     nodeCount: nodeCount
     nodeVmSize: nodeVmSize
-    subnetId: network.outputs.aksSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
   }
 }
 
 module acr 'modules/acr.bicep' = {
-  name: 'acr-deployment'
+  name: 'acr'
   params: {
-    namePrefix: clusterName
     location: location
+    clusterName: clusterName
+    environment: environment
     tags: tags
-    kubeletIdentityObjectId: aks.outputs.kubeletIdentityObjectId
+    aksKubeletIdentityObjectId: aks.outputs.kubeletIdentityObjectId
   }
 }
 
-module serviceBus 'modules/serviceBus.bicep' = {
-  name: 'servicebus-deployment'
+module serviceBus 'modules/servicebus.bicep' = {
+  name: 'serviceBus'
   params: {
-    namePrefix: clusterName
     location: location
-    tags: tags
-  }
-}
-
-module cosmosDb 'modules/cosmosDb.bicep' = {
-  name: 'cosmosdb-deployment'
-  params: {
-    namePrefix: clusterName
-    location: location
+    clusterName: clusterName
+    environment: environment
     tags: tags
   }
 }
 
-@description('AKS cluster FQDN')
-output aksClusterFqdn string = aks.outputs.aksClusterFqdn
+module cosmosDb 'modules/cosmosdb.bicep' = {
+  name: 'cosmosDb'
+  params: {
+    location: location
+    clusterName: clusterName
+    environment: environment
+    tags: tags
+  }
+}
 
-@description('ACR login server')
+output aksClusterName string = aks.outputs.aksClusterName
 output acrLoginServer string = acr.outputs.acrLoginServer
-
-@description('Service Bus endpoint')
-output serviceBusEndpoint string = serviceBus.outputs.serviceBusEndpoint
-
-@description('Cosmos DB endpoint')
+output serviceBusNamespace string = serviceBus.outputs.serviceBusNamespaceName
 output cosmosDbEndpoint string = cosmosDb.outputs.cosmosDbEndpoint
-
-@description('Application Insights connection string')
-output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString

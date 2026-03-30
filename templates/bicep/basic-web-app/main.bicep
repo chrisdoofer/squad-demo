@@ -1,72 +1,151 @@
 targetScope = 'resourceGroup'
 
-// ──────────────────────────────────────────────
-// Basic Web App — App Service + SQL + Monitoring
-// Reference: https://learn.microsoft.com/en-us/azure/architecture/web-apps/app-service/architectures/basic-web-app
-// ──────────────────────────────────────────────
-
-@description('Name of the web application. Used as a prefix for all resources.')
+@description('Name of the web application (used as prefix for all resources)')
 param appName string
 
-@description('Azure region for resource deployment.')
-param location string = 'uksouth'
+@description('Azure region for all resources')
+param location string = resourceGroup().location
 
-@description('SQL Server administrator login name.')
+@description('App Service Plan SKU')
+param appServicePlanSku string = 'S1'
+
+@description('SQL Server administrator login')
 param sqlAdminLogin string
 
+@description('SQL Server administrator password')
 @secure()
-@description('SQL Server administrator password.')
 param sqlAdminPassword string
 
-@description('Tags to apply to all resources.')
-param tags object = {}
+@description('Environment name')
+@allowed([
+  'dev'
+  'staging'
+  'prod'
+])
+param environment string = 'dev'
 
-// ── Monitoring ──────────────────────────────
-module monitoring 'modules/monitoring.bicep' = {
-  name: '${appName}-monitoring'
-  params: {
-    appName: appName
-    location: location
-    tags: tags
+var suffix = uniqueString(resourceGroup().id)
+var appServicePlanName = 'asp-${appName}-${environment}'
+var appServiceName = 'app-${appName}-${suffix}'
+var sqlServerName = 'sql-${appName}-${suffix}'
+var sqlDatabaseName = 'sqldb-${appName}-${environment}'
+var logAnalyticsName = 'log-${appName}-${environment}'
+var appInsightsName = 'appi-${appName}-${environment}'
+
+var tags = {
+  environment: environment
+  project: appName
+}
+
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsName
+  location: location
+  tags: tags
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
   }
 }
 
-// ── SQL Database ────────────────────────────
-module sql 'modules/sqlDatabase.bicep' = {
-  name: '${appName}-sql'
-  params: {
-    appName: appName
-    location: location
-    sqlAdminLogin: sqlAdminLogin
-    sqlAdminPassword: sqlAdminPassword
-    tags: tags
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  tags: tags
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+    RetentionInDays: 90
   }
 }
 
-// ── App Service ─────────────────────────────
-module appService 'modules/appService.bicep' = {
-  name: '${appName}-appservice'
-  params: {
-    appName: appName
-    location: location
-    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
-    sqlServerFqdn: sql.outputs.sqlServerFqdn
-    sqlAdminLogin: sqlAdminLogin
-    sqlAdminPassword: sqlAdminPassword
-    sqlDatabaseName: sql.outputs.sqlDatabaseName
-    tags: tags
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: appServicePlanName
+  location: location
+  tags: tags
+  kind: 'linux'
+  sku: {
+    name: appServicePlanSku
+  }
+  properties: {
+    reserved: true
   }
 }
 
-// ── Outputs ─────────────────────────────────
-@description('Default hostname of the deployed Web App.')
-output webAppHostName string = appService.outputs.webAppHostName
+resource appService 'Microsoft.Web/sites@2023-12-01' = {
+  name: appServiceName
+  location: location
+  tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      minTlsVersion: '1.2'
+      ftpsState: 'Disabled'
+      linuxFxVersion: 'DOTNETCORE|8.0'
+      appSettings: [
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsights.properties.ConnectionString
+        }
+        {
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
+        }
+      ]
+      connectionStrings: [
+        {
+          name: 'DefaultConnection'
+          connectionString: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${sqlDatabase.name};Persist Security Info=False;User ID=${sqlAdminLogin};Password=${sqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+          type: 'SQLAzure'
+        }
+      ]
+    }
+  }
+}
 
-@description('Resource ID of the Web App.')
-output webAppId string = appService.outputs.webAppId
+resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
+  name: sqlServerName
+  location: location
+  tags: tags
+  properties: {
+    administratorLogin: sqlAdminLogin
+    administratorLoginPassword: sqlAdminPassword
+    version: '12.0'
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+  }
+}
 
-@description('Resource ID of the SQL Server.')
-output sqlServerId string = sql.outputs.sqlServerId
+resource sqlFirewallRule 'Microsoft.Sql/servers/firewallRules@2023-05-01-preview' = {
+  parent: sqlServer
+  name: 'AllowAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
 
-@description('Resource ID of the Application Insights instance.')
-output appInsightsId string = monitoring.outputs.appInsightsId
+resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-05-01-preview' = {
+  parent: sqlServer
+  name: sqlDatabaseName
+  location: location
+  tags: tags
+  sku: {
+    name: 'Basic'
+    tier: 'Basic'
+  }
+  properties: {
+    maxSizeBytes: 2147483648
+    collation: 'SQL_Latin1_General_CP1_CI_AS'
+  }
+}
+
+output appServiceUrl string = 'https://${appService.properties.defaultHostName}'
+output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
+output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName

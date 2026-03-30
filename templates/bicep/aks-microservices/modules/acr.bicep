@@ -1,45 +1,48 @@
-@description('Prefix for resource names')
-param namePrefix string
-
-@description('Azure region for resources')
+@description('Azure region for all resources')
 param location string
 
-@description('Tags to apply to all resources')
-param tags object = {}
+@description('Cluster name prefix')
+param clusterName string
 
-@description('Object ID of the AKS kubelet identity for ACR pull role assignment')
-param kubeletIdentityObjectId string
+@description('Environment name')
+param environment string
 
-var acrName = replace('${namePrefix}acr', '-', '')
+@description('Resource tags')
+param tags object
 
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
-  name: length(acrName) > 50 ? substring(acrName, 0, 50) : acrName
+@description('AKS kubelet managed identity object ID for AcrPull role assignment')
+param aksKubeletIdentityObjectId string
+
+var suffix = uniqueString(resourceGroup().id)
+var acrName = toLower('acr${clusterName}${environment}${suffix}')
+
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: acrName
   location: location
   tags: tags
   sku: {
-    name: 'Basic'
+    name: 'Premium'
   }
   properties: {
     adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
+    zoneRedundancy: 'Enabled'
   }
 }
 
-// AcrPull role assignment for AKS kubelet identity
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+
 resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, kubeletIdentityObjectId, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-  scope: containerRegistry
+  name: guid(acr.id, aksKubeletIdentityObjectId, acrPullRoleId)
+  scope: acr
   properties: {
-    principalId: kubeletIdentityObjectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalId: aksKubeletIdentityObjectId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
     principalType: 'ServicePrincipal'
   }
 }
 
-@description('Resource ID of the Container Registry')
-output acrId string = containerRegistry.id
+output acrName string = acr.name
+output acrLoginServer string = acr.properties.loginServer
+output acrId string = acr.id
 
-@description('Name of the Container Registry')
-output acrName string = containerRegistry.name
-
-@description('Login server of the Container Registry')
-output acrLoginServer string = containerRegistry.properties.loginServer

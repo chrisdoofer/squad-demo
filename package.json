@@ -6,7 +6,7 @@
   "scripts": {
     "frontend:dev": "npm run dev -w src/frontend",
     "backend:dev": "npm run dev -w src/backend",
-    "test": "npm run test -w src/frontend && npm run test -w src/backend",
+    "test": "npm run test -w src/frontend && jest --config tests/jest.config.js",
     "lint": "npm run lint -w src/frontend && npm run lint -w src/backend"
   }
 }

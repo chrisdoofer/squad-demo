@@ -1,16 +1,19 @@
-@description('Name prefix for monitoring resources.')
-param appName string
-
-@description('Azure region for resource deployment.')
+@description('Azure region for all resources')
 param location string
 
-@description('Tags to apply to all resources.')
-param tags object = {}
+@description('Application name prefix')
+param appName string
 
-var logAnalyticsName = '${appName}-law'
-var appInsightsName = '${appName}-ai'
+@description('Environment name')
+param environment string
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+@description('Resource tags')
+param tags object
+
+var logAnalyticsName = 'log-${appName}-${environment}'
+var appInsightsName = 'appi-${appName}-${environment}'
+
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
   location: location
   tags: tags
@@ -29,15 +32,12 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   kind: 'web'
   properties: {
     Application_Type: 'web'
-    WorkspaceResourceId: logAnalyticsWorkspace.id
+    WorkspaceResourceId: logAnalytics.id
+    RetentionInDays: 90
   }
 }
 
-@description('Resource ID of the Log Analytics Workspace.')
-output logAnalyticsWorkspaceId string = logAnalyticsWorkspace.id
-
-@description('Resource ID of the Application Insights instance.')
+output logAnalyticsId string = logAnalytics.id
 output appInsightsId string = appInsights.id
-
-@description('Application Insights connection string.')
+output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
