@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { authMiddleware } from '../../../src/backend/src/middleware/auth';
+import {
+  authMiddleware,
+  requireGitHubToken,
+  optionalAuth,
+} from '../../../src/backend/src/middleware/auth';
 
 /** Build a minimal JWT token with the given payload claims. */
 function makeToken(payload: Record<string, unknown>): string {
@@ -159,6 +163,109 @@ describe('Auth Middleware', () => {
       authMiddleware(req, res, next);
 
       expect(req.githubToken).toBe(token);
+    });
+  });
+
+  describe('requireGitHubToken', () => {
+    const ORIGINAL_GH_TOKEN = process.env.GITHUB_TOKEN;
+
+    afterEach(() => {
+      if (ORIGINAL_GH_TOKEN !== undefined) {
+        process.env.GITHUB_TOKEN = ORIGINAL_GH_TOKEN;
+      } else {
+        delete process.env.GITHUB_TOKEN;
+      }
+    });
+
+    it('passes when a valid Bearer token is present', () => {
+      delete process.env.GITHUB_TOKEN;
+      const { req, res, next } = mockReqResNext();
+      req.githubToken = 'ghp_validtoken123';
+
+      requireGitHubToken(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.githubToken).toBe('ghp_validtoken123');
+    });
+
+    it('passes when x-github-token header is present', () => {
+      delete process.env.GITHUB_TOKEN;
+      const { req, res, next } = mockReqResNext({
+        'x-github-token': 'ghp_headertoken',
+      });
+
+      requireGitHubToken(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.githubToken).toBe('ghp_headertoken');
+    });
+
+    it('passes when GITHUB_TOKEN env var is set', () => {
+      process.env.GITHUB_TOKEN = 'ghp_envtoken';
+      const { req, res, next } = mockReqResNext();
+
+      requireGitHubToken(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.githubToken).toBe('ghp_envtoken');
+    });
+
+    it('rejects with 401 when no GitHub token is available', () => {
+      delete process.env.GITHUB_TOKEN;
+      const { req, res, next, resData } = mockReqResNext();
+
+      requireGitHubToken(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(resData.statusCode).toBe(401);
+    });
+  });
+
+  describe('optionalAuth', () => {
+    it('passes even without a token', () => {
+      const { req, res, next } = mockReqResNext();
+
+      optionalAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('does not set user when no token provided', () => {
+      const { req, res, next } = mockReqResNext();
+
+      optionalAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.user).toBeUndefined();
+    });
+
+    it('extracts token when a valid Bearer token is present', () => {
+      const token = makeToken({
+        oid: 'optional-user-1',
+        name: 'Optional User',
+        email: 'opt@example.com',
+      });
+      const { req, res, next } = mockReqResNext({
+        authorization: `Bearer ${token}`,
+      });
+
+      optionalAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.githubToken).toBe(token);
+      expect(req.user).toBeDefined();
+      expect(req.user!.oid).toBe('optional-user-1');
+    });
+
+    it('still passes with a malformed Bearer token', () => {
+      const { req, res, next } = mockReqResNext({
+        authorization: 'Bearer not-a-jwt',
+      });
+
+      optionalAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.githubToken).toBe('not-a-jwt');
     });
   });
 });

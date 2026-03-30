@@ -47,10 +47,16 @@ describe('Catalog Service', () => {
   });
 
   describe('searchTemplates', () => {
-    it('finds templates matching name', async () => {
+    it('finds templates by name keyword', async () => {
       const results = await searchTemplates('serverless');
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results.some((t) => t.id === 'serverless-api')).toBe(true);
+    });
+
+    it('finds templates by description keyword', async () => {
+      const results = await searchTemplates('kubernetes');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.some((t) => t.id === 'aks-microservices')).toBe(true);
     });
 
     it('returns empty array for no matches', async () => {
@@ -70,6 +76,24 @@ describe('Catalog Service', () => {
 
     it('returns empty array for unknown category', async () => {
       const results = await filterByCategory('nonexistent');
+      expect(results).toHaveLength(0);
+    });
+
+    it('filterByCategory("Web") returns 3 templates', async () => {
+      const results = await filterByCategory('Web');
+      expect(results).toHaveLength(3);
+      const ids = results.map((t) => t.id).sort();
+      expect(ids).toEqual(['baseline-web-app', 'basic-web-app', 'static-web-app']);
+    });
+
+    it('filterByCategory("Containers") returns 1 template', async () => {
+      const results = await filterByCategory('Containers');
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('aks-microservices');
+    });
+
+    it('filterByCategory("NonExistent") returns empty array', async () => {
+      const results = await filterByCategory('NonExistent');
       expect(results).toHaveLength(0);
     });
   });

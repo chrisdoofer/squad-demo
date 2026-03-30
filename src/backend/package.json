@@ -31,6 +31,16 @@
     "ts-jest": "^29.1.4",
     "@types/jest": "^29.5.12",
     "supertest": "^7.0.0",
-    "@types/supertest": "^6.0.2"
+    "@types/supertest": "^6.0.2",
+    "js-yaml": "^4.1.0",
+    "@types/js-yaml": "^4.0.9"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/src", "<rootDir>/../../tests"],
+    "testMatch": ["**/*.test.ts"],
+    "moduleFileExtensions": ["ts", "js", "json"],
+    "collectCoverageFrom": ["src/**/*.ts", "!src/index.ts"]
   }
 }
