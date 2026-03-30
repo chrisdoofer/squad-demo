@@ -4,6 +4,7 @@ import { getTemplates } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorAlert from '../components/ErrorAlert';
 import TemplateCard from '../components/TemplateCard';
+import CategoryFilter from '../components/CategoryFilter';
 
 function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -37,56 +38,51 @@ function Home() {
       const matchesSearch =
         !q ||
         t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q);
+        t.description.toLowerCase().includes(q) ||
+        t.services.some((s) => s.toLowerCase().includes(q));
       return matchesCategory && matchesSearch;
     });
   }, [templates, search, category]);
 
-  if (loading) return <LoadingSpinner message="Loading templates…" />;
-
-  if (error) return <ErrorAlert message={error} onRetry={fetchTemplates} />;
-
   return (
     <div>
-      <div className="page-header">
-        <h2>Template Catalog</h2>
-        <p>Browse Azure reference architecture templates and deploy with one click.</p>
-      </div>
+      {/* Hero */}
+      <section className="hero">
+        <h1>Internal Developer Platform</h1>
+        <p>
+          Deploy Azure reference architectures with one click. Browse templates,
+          configure parameters, and deploy to Azure or push to GitHub.
+        </p>
+      </section>
 
-      <div className="filter-bar">
-        <input
-          type="text"
-          className="search-input"
-          placeholder="Search templates…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search templates"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Filter by category"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c === 'all' ? 'All categories' : c}
-            </option>
-          ))}
-        </select>
-      </div>
+      {loading && <LoadingSpinner message="Loading templates…" />}
 
-      {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon" aria-hidden="true">🔍</div>
-          <h3>No templates found</h3>
-          <p>Try adjusting your search or filter criteria.</p>
-        </div>
-      ) : (
-        <div className="template-grid">
-          {filtered.map((t) => (
-            <TemplateCard key={t.id} template={t} />
-          ))}
-        </div>
+      {error && <ErrorAlert message={error} onRetry={fetchTemplates} />}
+
+      {!loading && !error && (
+        <>
+          <CategoryFilter
+            categories={categories}
+            selected={category}
+            onSelect={setCategory}
+            search={search}
+            onSearchChange={setSearch}
+          />
+
+          {filtered.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon" aria-hidden="true">🔍</div>
+              <h3>No templates found</h3>
+              <p>Try adjusting your search or filter criteria.</p>
+            </div>
+          ) : (
+            <div className="template-grid">
+              {filtered.map((t) => (
+                <TemplateCard key={t.id} template={t} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

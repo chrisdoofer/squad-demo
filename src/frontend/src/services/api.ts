@@ -2,37 +2,59 @@ import { Template, Deployment, DeploymentRequest } from '../types';
 
 const API_BASE = '/api';
 
-export async function getTemplates(): Promise<Template[]> {
-  const res = await fetch(`${API_BASE}/templates`);
-  if (!res.ok) throw new Error('Failed to fetch templates');
-  return res.json();
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(body || `Request failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function requestText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return res.text();
+}
+
+export async function getTemplates(filters?: {
+  category?: string;
+  search?: string;
+}): Promise<Template[]> {
+  const params = new URLSearchParams();
+  if (filters?.category) params.set('category', filters.category);
+  if (filters?.search) params.set('search', filters.search);
+  const qs = params.toString();
+  return request<Template[]>(`${API_BASE}/templates${qs ? `?${qs}` : ''}`);
 }
 
 export async function getTemplate(id: string): Promise<Template> {
-  const res = await fetch(`${API_BASE}/templates/${id}`);
-  if (!res.ok) throw new Error('Failed to fetch template');
-  return res.json();
+  return request<Template>(`${API_BASE}/templates/${id}`);
 }
 
-export async function createDeployment(request: DeploymentRequest): Promise<Deployment> {
-  const endpoint = request.target === 'azure' ? 'azure' : 'github';
-  const res = await fetch(`${API_BASE}/deploy/${endpoint}`, {
+export async function getTemplateBicep(id: string): Promise<string> {
+  return requestText(`${API_BASE}/templates/${id}/bicep`);
+}
+
+export async function getTemplateWorkflow(id: string): Promise<string> {
+  return requestText(`${API_BASE}/templates/${id}/workflow`);
+}
+
+export async function createDeployment(req: DeploymentRequest): Promise<Deployment> {
+  const endpoint = req.target === 'azure' ? 'azure' : 'github';
+  return request<Deployment>(`${API_BASE}/deploy/${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: JSON.stringify(req),
   });
-  if (!res.ok) throw new Error('Failed to create deployment');
-  return res.json();
 }
 
 export async function getDeployments(): Promise<Deployment[]> {
-  const res = await fetch(`${API_BASE}/deployments`);
-  if (!res.ok) throw new Error('Failed to fetch deployments');
-  return res.json();
+  return request<Deployment[]>(`${API_BASE}/deployments`);
 }
 
 export async function getDeployment(id: string): Promise<Deployment> {
-  const res = await fetch(`${API_BASE}/deployments/${id}`);
-  if (!res.ok) throw new Error('Failed to fetch deployment');
-  return res.json();
+  return request<Deployment>(`${API_BASE}/deployments/${id}`);
 }
