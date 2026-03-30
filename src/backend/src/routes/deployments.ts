@@ -1,17 +1,21 @@
 import { Router, Request, Response } from 'express';
-import { Deployment } from '../types';
+import { getAllDeployments, getDeployment } from '../services/deploymentStore';
 
 const router = Router();
 
-// In-memory store for demo purposes
-const deployments: Deployment[] = [];
-
+/**
+ * GET /api/deployments — List all deployments, newest first.
+ */
 router.get('/', (_req: Request, res: Response) => {
+  const deployments = getAllDeployments();
   res.json(deployments);
 });
 
+/**
+ * GET /api/deployments/:id — Get a single deployment by ID.
+ */
 router.get('/:id', (req: Request, res: Response) => {
-  const deployment = deployments.find((d) => d.id === req.params.id);
+  const deployment = getDeployment(req.params.id);
   if (!deployment) {
     return res.status(404).json({ error: 'Deployment not found' });
   }
