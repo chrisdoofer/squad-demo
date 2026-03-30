@@ -9,6 +9,112 @@ import { v4 as uuidv4 } from 'uuid';
 /** Root of the monorepo — template paths in the catalog are relative to this. */
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
+// ── Standalone GitHub utility functions ──────────────────────────────
+
+/** Create a new GitHub repository. */
+export async function createRepository(
+  token: string,
+  owner: string,
+  name: string,
+  description: string,
+  isPrivate: boolean,
+): Promise<{ htmlUrl: string; fullName: string }> {
+  const octokit = new Octokit({ auth: token });
+
+  try {
+    const { data } = await octokit.repos.createInOrg({
+      org: owner,
+      name,
+      description,
+      auto_init: true,
+      private: isPrivate,
+    });
+    return { htmlUrl: data.html_url, fullName: data.full_name };
+  } catch {
+    const { data } = await octokit.repos.createForAuthenticatedUser({
+      name,
+      description,
+      auto_init: true,
+      private: isPrivate,
+    });
+    return { htmlUrl: data.html_url, fullName: data.full_name };
+  }
+}
+
+/**
+ * Push multiple files to a GitHub repo in a single commit using the
+ * Git Data API (create tree → create commit → update ref).
+ */
+export async function pushFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  files: { path: string; content: string }[],
+  message = 'chore: push files via IDP',
+): Promise<void> {
+  const octokit = new Octokit({ auth: token });
+  const mappedFiles = files.map((f) => ({ repoPath: f.path, content: f.content }));
+  await commitFilesToRepo(octokit, owner, repo, branch, mappedFiles, message);
+}
+
+/** List repositories for the authenticated user or a specific owner. */
+export async function getRepositories(
+  token: string,
+  owner?: string,
+): Promise<{ name: string; fullName: string; htmlUrl: string; private: boolean }[]> {
+  const octokit = new Octokit({ auth: token });
+
+  if (owner) {
+    const { data } = await octokit.repos.listForUser({ username: owner, per_page: 100 });
+    return data.map((r) => ({ name: r.name, fullName: r.full_name, htmlUrl: r.html_url, private: r.private }));
+  }
+
+  const { data } = await octokit.repos.listForAuthenticatedUser({ per_page: 100 });
+  return data.map((r) => ({ name: r.name, fullName: r.full_name, htmlUrl: r.html_url, private: r.private }));
+}
+
+/**
+ * Push a template's Bicep and workflow files to a GitHub repo.
+ * Reads files from disk based on the catalog template paths.
+ */
+export async function pushTemplateToRepo(
+  token: string,
+  owner: string,
+  repo: string,
+  templateId: string,
+  branch = 'main',
+): Promise<{ filesCommitted: number }> {
+  const template = await getTemplateById(templateId);
+  if (!template) {
+    throw new Error(`Template "${templateId}" not found in catalog`);
+  }
+
+  const filesToCommit: { repoPath: string; content: string }[] = [];
+
+  const bicepDir = path.join(PROJECT_ROOT, path.dirname(template.bicepPath));
+  if (fs.existsSync(bicepDir)) {
+    collectFiles(bicepDir, 'infra', filesToCommit);
+  }
+
+  const workflowDir = path.join(PROJECT_ROOT, path.dirname(template.workflowPath));
+  if (fs.existsSync(workflowDir)) {
+    collectFiles(workflowDir, '.github/workflows', filesToCommit);
+  }
+
+  if (filesToCommit.length > 0) {
+    const octokit = new Octokit({ auth: token });
+    await commitFilesToRepo(
+      octokit, owner, repo, branch, filesToCommit,
+      `chore: scaffold ${template.name} template via IDP`,
+    );
+  }
+
+  return { filesCommitted: filesToCommit.length };
+}
+
+// ── Main deployment orchestrator ─────────────────────────────────────
+
 /**
  * Scaffold a new GitHub repository with the selected template's
  * Bicep files and a GitHub Actions deployment workflow, then

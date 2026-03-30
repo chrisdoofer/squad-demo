@@ -59,3 +59,12 @@ export function updateDeploymentStatus(
   console.log(`[deploymentStore] updated deployment ${id} → ${status}`);
   return { ...updated };
 }
+
+/** Delete a deployment record. Returns true if it existed. */
+export function deleteDeployment(id: string): boolean {
+  const existed = store.delete(id);
+  if (existed) {
+    console.log(`[deploymentStore] deleted deployment ${id}`);
+  }
+  return existed;
+}

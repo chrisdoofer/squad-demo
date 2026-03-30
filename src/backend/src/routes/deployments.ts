@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllDeployments, getDeployment } from '../services/deploymentStore';
+import { getAllDeployments, getDeployment, deleteDeployment } from '../services/deploymentStore';
 
 const router = Router();
 
@@ -17,9 +17,20 @@ router.get('/', (_req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   const deployment = getDeployment(req.params.id);
   if (!deployment) {
-    return res.status(404).json({ error: 'Deployment not found' });
+    return res.status(404).json({ error: 'Not Found', message: 'Deployment not found', statusCode: 404 });
   }
   res.json(deployment);
+});
+
+/**
+ * DELETE /api/deployments/:id — Cancel/remove a deployment record.
+ */
+router.delete('/:id', (req: Request, res: Response) => {
+  const existed = deleteDeployment(req.params.id);
+  if (!existed) {
+    return res.status(404).json({ error: 'Not Found', message: 'Deployment not found', statusCode: 404 });
+  }
+  res.status(204).send();
 });
 
 export { router as deploymentRoutes };

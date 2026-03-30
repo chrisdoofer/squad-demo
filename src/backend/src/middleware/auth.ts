@@ -15,6 +15,8 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
+      /** GitHub Personal Access Token extracted from Authorization or x-github-token header. */
+      githubToken?: string;
     }
   }
 }
@@ -45,6 +47,11 @@ const DEV_USER: AuthUser = {
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   const isDev = process.env.NODE_ENV !== 'production';
   const authHeader = req.headers.authorization;
+
+  // Stash the raw token for GitHub operations
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    req.githubToken = authHeader.slice(7);
+  }
 
   // ── No token supplied ──────────────────────────────────────────────
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -95,6 +102,62 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
     res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+/**
+ * Middleware that ensures a GitHub token is present in the request.
+ * Checks for a `x-github-token` header or falls back to the
+ * GITHUB_TOKEN environment variable.
+ */
+export function requireGitHubToken(req: Request, res: Response, next: NextFunction): void {
+  const ghToken =
+    req.githubToken ||
+    (req.headers['x-github-token'] as string | undefined) ||
+    process.env.GITHUB_TOKEN;
+
+  if (!ghToken) {
+    res.status(401).json({
+      error: 'Unauthorized',
+      message: 'A GitHub token is required via Authorization header, x-github-token header, or GITHUB_TOKEN env var',
+      statusCode: 401,
+    });
+    return;
+  }
+
+  req.githubToken = ghToken;
+  next();
+}
+
+/**
+ * Optional auth middleware — extracts token if present but does not
+ * reject requests without one.
+ */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    req.githubToken = authHeader.slice(7);
+
+    try {
+      const claims = decodeJwt(authHeader.slice(7));
+      if (claims && (claims.oid || claims.sub)) {
+        req.user = {
+          oid: (claims.oid as string) || (claims.sub as string) || '',
+          name: (claims.name as string) || (claims.preferred_username as string) || 'Unknown',
+          email:
+            (claims.email as string) ||
+            (claims.preferred_username as string) ||
+            (claims.upn as string) ||
+            '',
+          roles: Array.isArray(claims.roles) ? (claims.roles as string[]) : [],
+        };
+      }
+    } catch {
+      // Non-fatal — proceed without user context
+    }
+  }
+
+  next();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

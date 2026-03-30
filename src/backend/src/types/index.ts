@@ -46,3 +46,13 @@ export interface Deployment {
   result?: Record<string, unknown>;
   error?: string;
 }
+
+export interface TemplateCatalog {
+  templates: Template[];
+}
+
+export interface ApiError {
+  error: string;
+  message: string;
+  statusCode: number;
+}
