@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Deployments from '../Deployments';
@@ -119,7 +119,9 @@ describe('Deployments', () => {
     mockedGetDeployments.mockResolvedValueOnce(mockDeployments);
 
     // Advance timer past the poll interval (10s)
-    vi.advanceTimersByTime(10_000);
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
 
     // Should have been called again for the refresh
     await waitFor(() => {
