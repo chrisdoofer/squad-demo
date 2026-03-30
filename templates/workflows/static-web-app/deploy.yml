@@ -1,17 +1,10 @@
-name: Deploy Static Web App
+name: Deploy Static Web App with API
+
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
-      resource-group:
-        description: 'Azure Resource Group name'
+      appName:
+        description: 'Name of the Static Web App'
         required: true
         type: string
       location:
@@ -19,12 +12,21 @@ on:
         required: false
         type: string
         default: 'uksouth'
-      appName:
-        description: 'Name of the Static Web App'
-        required: true
-        type: string
       repositoryUrl:
         description: 'GitHub repository URL for the Static Web App source'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      resourceGroup:
+        description: 'Azure Resource Group name'
         required: true
         type: string
 
@@ -34,133 +36,72 @@ permissions:
 
 jobs:
   validate:
-    uses: ./.github/workflows/reusable-bicep-validate.yml
-    with:
-      template-path: templates/bicep/static-web-app/main.bicep
-      resource-group: ${{ inputs.resource-group }}
-    secrets: inherit
-
-  deploy-dev:
-    needs: validate
-    if: inputs.environment == 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy Static Web App infrastructure
-        run: |
-          az deployment group create \
-            --resource-group ${{ inputs.resource-group }} \
-            --template-file templates/bicep/static-web-app/main.bicep \
-            --parameters \
-              appName=${{ inputs.appName }} \
-              location=${{ inputs.location }} \
-              repositoryUrl=${{ inputs.repositoryUrl }}
-      - name: Retrieve deployment token
-        id: token
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          TOKEN=$(az staticwebapp secrets list \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "properties.apiKey" \
-            --output tsv)
-          echo "::add-mask::${TOKEN}"
-          echo "deployment-token=${TOKEN}" >> "$GITHUB_OUTPUT"
-      - name: Show deployment info
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          az staticwebapp show \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "{name:name, url:defaultHostname, status:contentDistributionEndpoint}" \
-            --output table
 
-  deploy-staging:
+      - name: Validate Bicep
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/static-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            repositoryUrl=${{ inputs.repositoryUrl }}
+          deploymentMode: Validate
+
+      - name: What-If Preview
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/static-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            repositoryUrl=${{ inputs.repositoryUrl }}
+          additionalArguments: --what-if
+
+  deploy:
     needs: validate
-    if: inputs.environment == 'staging'
-    environment: staging
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy Static Web App infrastructure
-        run: |
-          az deployment group create \
-            --resource-group ${{ inputs.resource-group }} \
-            --template-file templates/bicep/static-web-app/main.bicep \
-            --parameters \
-              appName=${{ inputs.appName }} \
-              location=${{ inputs.location }} \
-              repositoryUrl=${{ inputs.repositoryUrl }}
-      - name: Retrieve deployment token
-        id: token
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          TOKEN=$(az staticwebapp secrets list \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "properties.apiKey" \
-            --output tsv)
-          echo "::add-mask::${TOKEN}"
-          echo "deployment-token=${TOKEN}" >> "$GITHUB_OUTPUT"
-      - name: Show deployment info
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          az staticwebapp show \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "{name:name, url:defaultHostname, status:contentDistributionEndpoint}" \
-            --output table
 
-  deploy-prod:
-    needs: validate
-    if: inputs.environment == 'prod'
-    environment: production
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
+      - name: Deploy to Azure
+        id: deploy
+        uses: azure/arm-deploy@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy Static Web App infrastructure
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/static-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            repositoryUrl=${{ inputs.repositoryUrl }}
+          deploymentName: idp-static-web-app-${{ github.run_number }}
+
+      - name: Deployment Outputs
         run: |
-          az deployment group create \
-            --resource-group ${{ inputs.resource-group }} \
-            --template-file templates/bicep/static-web-app/main.bicep \
-            --parameters \
-              appName=${{ inputs.appName }} \
-              location=${{ inputs.location }} \
-              repositoryUrl=${{ inputs.repositoryUrl }}
-      - name: Retrieve deployment token
-        id: token
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          TOKEN=$(az staticwebapp secrets list \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "properties.apiKey" \
-            --output tsv)
-          echo "::add-mask::${TOKEN}"
-          echo "deployment-token=${TOKEN}" >> "$GITHUB_OUTPUT"
-      - name: Show deployment info
-        run: |
-          SWA_NAME="${{ inputs.appName }}-swa"
-          az staticwebapp show \
-            --resource-group ${{ inputs.resource-group }} \
-            --name "${SWA_NAME}" \
-            --query "{name:name, url:defaultHostname, status:contentDistributionEndpoint}" \
-            --output table
+          echo "## Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Static Web App Hostname:** ${{ steps.deploy.outputs.staticWebAppHostName }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Static Web App ID:** ${{ steps.deploy.outputs.staticWebAppId }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cosmos DB Endpoint:** ${{ steps.deploy.outputs.cosmosEndpoint }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cosmos DB Account ID:** ${{ steps.deploy.outputs.cosmosAccountId }}" >> $GITHUB_STEP_SUMMARY

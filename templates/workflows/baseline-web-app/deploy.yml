@@ -1,17 +1,10 @@
-name: Deploy Baseline Web App
+name: Deploy Baseline Zone-Redundant Web App
+
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
-      resource-group:
-        description: 'Azure Resource Group name'
+      appName:
+        description: 'Name of the web application'
         required: true
         type: string
       location:
@@ -19,19 +12,23 @@ on:
         required: false
         type: string
         default: 'uksouth'
-      appName:
-        description: 'Name of the web application'
-        required: true
-        type: string
       sqlAdminLogin:
         description: 'SQL Server administrator login name'
         required: true
         type: string
-      parameters-file:
-        description: 'Path to a parameters JSON file (optional, overrides inline params)'
-        required: false
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      resourceGroup:
+        description: 'Azure Resource Group name'
+        required: true
         type: string
-        default: ''
 
 permissions:
   id-token: write
@@ -39,86 +36,78 @@ permissions:
 
 jobs:
   validate:
-    uses: ./.github/workflows/reusable-bicep-validate.yml
-    with:
-      template-path: templates/bicep/baseline-web-app/main.bicep
-      resource-group: ${{ inputs.resource-group }}
-    secrets: inherit
-
-  deploy-dev:
-    needs: validate
-    if: inputs.environment == 'dev'
-    uses: ./.github/workflows/reusable-bicep-deploy.yml
-    with:
-      template-path: templates/bicep/baseline-web-app/main.bicep
-      resource-group: ${{ inputs.resource-group }}
-      location: ${{ inputs.location }}
-      parameters-file: ${{ inputs.parameters-file }}
-      parameters: >-
-        appName=${{ inputs.appName }}
-        location=${{ inputs.location }}
-        sqlAdminLogin=${{ inputs.sqlAdminLogin }}
-        sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
-    secrets: inherit
-
-  deploy-staging:
-    needs: validate
-    if: inputs.environment == 'staging'
-    environment: staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy to Staging
-        run: |
-          DEPLOY_CMD="az deployment group create \
-            --resource-group ${{ inputs.resource-group }} \
-            --template-file templates/bicep/baseline-web-app/main.bicep"
 
-          if [ -n "${{ inputs.parameters-file }}" ]; then
-            DEPLOY_CMD="${DEPLOY_CMD} --parameters @${{ inputs.parameters-file }}"
-          fi
+      - name: Validate Bicep
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/baseline-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            sqlAdminLogin=${{ inputs.sqlAdminLogin }}
+            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+          deploymentMode: Validate
 
-          DEPLOY_CMD="${DEPLOY_CMD} --parameters \
-            appName=${{ inputs.appName }} \
-            location=${{ inputs.location }} \
-            sqlAdminLogin=${{ inputs.sqlAdminLogin }} \
-            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}"
+      - name: What-If Preview
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/baseline-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            sqlAdminLogin=${{ inputs.sqlAdminLogin }}
+            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+          additionalArguments: --what-if
 
-          eval ${DEPLOY_CMD}
-
-  deploy-prod:
+  deploy:
     needs: validate
-    if: inputs.environment == 'prod'
-    environment: production
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy to Production
+
+      - name: Deploy to Azure
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ inputs.resourceGroup }}
+          template: ./templates/bicep/baseline-web-app/main.bicep
+          parameters: >
+            appName=${{ inputs.appName }}
+            location=${{ inputs.location }}
+            sqlAdminLogin=${{ inputs.sqlAdminLogin }}
+            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+          deploymentName: idp-baseline-web-app-${{ github.run_number }}
+
+      - name: Deployment Outputs
         run: |
-          DEPLOY_CMD="az deployment group create \
-            --resource-group ${{ inputs.resource-group }} \
-            --template-file templates/bicep/baseline-web-app/main.bicep"
-
-          if [ -n "${{ inputs.parameters-file }}" ]; then
-            DEPLOY_CMD="${DEPLOY_CMD} --parameters @${{ inputs.parameters-file }}"
-          fi
-
-          DEPLOY_CMD="${DEPLOY_CMD} --parameters \
-            appName=${{ inputs.appName }} \
-            location=${{ inputs.location }} \
-            sqlAdminLogin=${{ inputs.sqlAdminLogin }} \
-            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}"
-
-          eval ${DEPLOY_CMD}
+          echo "## Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Gateway Public IP:** ${{ steps.deploy.outputs.appGatewayPublicIp }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web App Hostname:** ${{ steps.deploy.outputs.webAppHostName }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web App ID:** ${{ steps.deploy.outputs.webAppId }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SQL Server ID:** ${{ steps.deploy.outputs.sqlServerId }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Key Vault ID:** ${{ steps.deploy.outputs.keyVaultId }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **VNet ID:** ${{ steps.deploy.outputs.vnetId }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Insights ID:** ${{ steps.deploy.outputs.appInsightsId }}" >> $GITHUB_STEP_SUMMARY
