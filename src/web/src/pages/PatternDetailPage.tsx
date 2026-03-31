@@ -11,8 +11,8 @@ export function PatternDetailPage() {
     return (
       <div className="detail-page">
         <div className="detail-not-found">
-          <h2>Pattern not found</h2>
-          <p>The pattern you're looking for doesn't exist.</p>
+          <h2>Demo not found</h2>
+          <p>The demo you're looking for doesn't exist.</p>
           <Link to="/" className="btn-secondary">
             ← Back to Catalog
           </Link>
@@ -83,9 +83,9 @@ export function PatternDetailPage() {
 
         <aside className="detail-sidebar">
           <div className="detail-section sidebar-deploy">
-            <h2>Deploy This Pattern</h2>
+            <h2>Deploy This Demo</h2>
             <p>
-              Click the button below to deploy this architecture to your Azure
+              Click the button below to deploy this demo to your Azure
               subscription using a pre-built Bicep template.
             </p>
             <DeployButton

@@ -24,9 +24,9 @@ export function CatalogPage() {
   return (
     <div className="catalog-page">
       <section className="hero">
-        <h1 className="hero-title">Azure Architecture Patterns</h1>
+        <h1 className="hero-title">Azure Infrastructure Demo Marketplace</h1>
         <p className="hero-subtitle">
-          Deploy production-ready Azure infrastructure with one click
+          Explore, evaluate, and deploy production-ready Azure infrastructure demos
         </p>
       </section>
 

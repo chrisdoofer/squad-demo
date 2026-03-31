@@ -3,15 +3,15 @@ import { Link } from 'react-router-dom';
 const steps = [
   {
     icon: '📚',
-    title: 'Browse Patterns',
+    title: 'Browse Demos',
     description:
-      'Explore our curated catalog of production-ready Azure architecture patterns. Filter by category, complexity, or search for specific services.',
+      'Explore our curated demo marketplace of production-ready Azure infrastructure demos. Filter by category, complexity, or search for specific services.',
   },
   {
     icon: '🔍',
     title: 'Review Architecture',
     description:
-      'Understand the components, services, and design decisions behind each pattern. Read the detailed descriptions and view architecture diagrams.',
+      'Understand the components, services, and design decisions behind each demo. Read the detailed descriptions and view architecture diagrams.',
   },
   {
     icon: '🚀',
@@ -33,7 +33,7 @@ export function GettingStartedPage() {
       <section className="hero">
         <h1 className="hero-title">Getting Started</h1>
         <p className="hero-subtitle">
-          Go from zero to production on Azure in four simple steps
+          Get started with the Azure Infrastructure Demo Marketplace in four simple steps
         </p>
       </section>
 
@@ -105,10 +105,10 @@ export function GettingStartedPage() {
       </section>
 
       <section className="contributing">
-        <h2>Contributing New Patterns</h2>
+        <h2>Contributing New Demos</h2>
         <p>
-          We welcome contributions from the team! To add a new architecture
-          pattern:
+          We welcome contributions from the community! To add a new demo to the
+          marketplace:
         </p>
         <ol>
           <li>
@@ -118,7 +118,7 @@ export function GettingStartedPage() {
             Add a GitHub Actions workflow for validation and deployment
           </li>
           <li>
-            Update the pattern catalog data with your new entry
+            Update the demo catalog data with your new entry
           </li>
           <li>Submit a pull request for review</li>
         </ol>

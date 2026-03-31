@@ -1,13 +1,13 @@
-# Azure Dev Platform — Internal Developer Portal
+# Azure Infrastructure Demo Marketplace
 
-An internal developer platform with a web UI showcasing Azure architecture patterns from the [Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/browse/).
+A demo marketplace with a web UI showcasing Azure architecture patterns from the [Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/browse/).
 
 ## Features
 
-- **10 Azure Architecture Patterns** — curated reference architectures with Bicep IaC
-- **One-Click Deploy** — deploy any pattern directly to your Azure subscription
-- **GitHub Workflows** — infrastructure deploy + app CI/CD starter workflows per pattern
-- **Pattern Catalog** — searchable, filterable catalog with descriptions and architecture diagrams
+- **10 Azure Infrastructure Demos** — curated reference architectures with Bicep IaC
+- **One-Click Deploy** — deploy any demo directly to your Azure subscription
+- **GitHub Workflows** — infrastructure deploy + app CI/CD starter workflows per demo
+- **Demo Catalog** — searchable, filterable catalog with descriptions and architecture diagrams
 
 ## Patterns Included
 
@@ -37,13 +37,13 @@ npm run dev:api    # Start the API server
 ```
 ├── src/web/        # React + TypeScript frontend (Vite)
 ├── src/api/        # Express + TypeScript API
-├── patterns/       # 10 Azure architecture patterns (Bicep + workflows)
+├── patterns/       # 10 Azure infrastructure demos (Bicep + workflows)
 └── .github/        # Platform CI/CD
 ```
 
 ## Deploy to Azure
 
-Each pattern includes a "Deploy to Azure" button that opens the Azure Portal with the pattern's Bicep template pre-loaded. Simply click, configure parameters, and deploy.
+Each demo includes a "Deploy to Azure" button that opens the Azure Portal with the demo's Bicep template pre-loaded. Simply click, configure parameters, and deploy.
 
 ## License
 

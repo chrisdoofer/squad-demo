@@ -17,8 +17,8 @@ function App() {
         </Routes>
       </main>
       <footer className="footer">
-        <p>Azure Dev Platform — Internal Developer Portal</p>
-        <p>Powered by Azure Architecture Center patterns</p>
+        <p>Azure Infrastructure Demo Marketplace</p>
+        <p>Powered by Azure Architecture Center reference architectures</p>
       </footer>
     </BrowserRouter>
   );

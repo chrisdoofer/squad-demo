@@ -9,7 +9,7 @@ export function Header() {
       <div className="header-inner">
         <Link to="/" className="header-brand">
           <span className="header-logo">☁️</span>
-          <span className="header-title">Azure Dev Platform</span>
+          <span className="header-title">Azure Demo Marketplace</span>
         </Link>
         <nav className="header-nav">
           <Link
