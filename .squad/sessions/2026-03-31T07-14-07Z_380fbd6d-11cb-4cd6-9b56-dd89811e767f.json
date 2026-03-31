@@ -1,0 +1,43 @@
+{
+  "id": "380fbd6d-11cb-4cd6-9b56-dd89811e767f",
+  "createdAt": "2026-03-31T07:14:04.690Z",
+  "lastActiveAt": "2026-03-31T07:35:57.159Z",
+  "messages": [
+    {
+      "role": "system",
+      "content": "⚠ No Squad team found. Run /init to create your team first.",
+      "timestamp": "2026-03-31T07:14:07.821Z"
+    },
+    {
+      "role": "system",
+      "content": "🏗️ No team yet — casting one based on your project...",
+      "timestamp": "2026-03-31T07:24:38.276Z"
+    },
+    {
+      "role": "agent",
+      "agentName": "coordinator",
+      "content": "Team proposed:\n\n🏗️  Danny      — Lead            Architecture, code review, decisions\n⚛️  Rusty      — Frontend Dev    React, UI components, styling\n🔧  Linus      — Backend Dev     Node.js, APIs, data models\n👤  Livingston — IaC Engineer    Bicep, GitHub Actions, Azure\n🧪  Basher     — Tester          Tests, quality, integration\n📋  Scribe     — (silent)        Memory, decisions, session logs\n🔄  Ralph      — (monitor)       Work queue, backlog, keep-alive\n\nUniverse: Ocean's Eleven",
+      "timestamp": "2026-03-31T07:25:45.139Z"
+    },
+    {
+      "role": "system",
+      "content": "Look good? Type **y** to confirm or **n** to cancel.",
+      "timestamp": "2026-03-31T07:25:45.261Z"
+    },
+    {
+      "role": "system",
+      "content": "✅ Team hired! 7 members created.",
+      "timestamp": "2026-03-31T07:25:56.752Z"
+    },
+    {
+      "role": "system",
+      "content": "📌 Routing your message to the team now...",
+      "timestamp": "2026-03-31T07:25:56.766Z"
+    },
+    {
+      "role": "system",
+      "content": "⚠ Team casting failed: Timeout after 600000ms waiting for session.idle\nTry again or edit .squad/team.md directly.",
+      "timestamp": "2026-03-31T07:35:57.158Z"
+    }
+  ]
+}

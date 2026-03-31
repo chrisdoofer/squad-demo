@@ -14,8 +14,8 @@
 
 | Work Type | Primary | Secondary |
 |-----------|---------|----------|
-| Architecture, integration, decisions | Danny | — |
-| APIs, GitHub/Azure integration | Rusty | — |
-| React UI, developer experience | Linus | — |
-| Bicep templates, Azure patterns | Livingston | — |
-| Testing, quality, CI/CD | Basher | — |
+| Architecture, code review, decisions | Danny | — |
+| React, UI components, styling | Rusty | — |
+| Node.js, APIs, data models | Linus | — |
+| Bicep, GitHub Actions, Azure | Livingston | — |
+| Tests, quality, integration | Basher | — |

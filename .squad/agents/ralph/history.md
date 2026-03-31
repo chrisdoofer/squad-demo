@@ -2,9 +2,9 @@
 
 ## Core Context
 
-- **Project:** An internal developer platform with a web UI for one-click deployment of standardised Azure Bicep templates and GitHub Action workflows sourced from Azure Architecture Center reference architectures.
+- **Project:** An internal developer platform with a web UI showcasing Azure architecture patterns with Bicep IaC, GitHub workflows, and single-click deploy to Azure subscriptions.
 - **Role:** Work Monitor
-- **Joined:** 2026-03-30T18:31:29.708Z
+- **Joined:** 2026-03-31T07:25:56.745Z
 
 ## Learnings
 

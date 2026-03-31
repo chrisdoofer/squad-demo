@@ -1,0 +1,21 @@
+.main-content {
+  min-height: calc(100vh - 140px);
+}
+
+.footer {
+  background: var(--color-text);
+  color: white;
+  text-align: center;
+  padding: 2rem;
+  margin-top: 4rem;
+}
+
+.footer p:first-child {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.footer p:last-child {
+  opacity: 0.7;
+  font-size: 0.875rem;
+}

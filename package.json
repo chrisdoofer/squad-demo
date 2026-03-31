@@ -1,18 +1,20 @@
 {
-  "name": "internal-developer-platform",
-  "version": "0.1.0",
+  "name": "azure-dev-platform",
+  "version": "1.0.0",
+  "description": "Internal Developer Platform — Azure Architecture Patterns",
   "private": true,
   "workspaces": [
-    "src/frontend",
-    "src/backend"
+    "src/web",
+    "src/api"
   ],
   "scripts": {
-    "frontend:dev": "npm run dev -w src/frontend",
-    "backend:dev": "npm run dev -w src/backend",
-    "test": "npm run test -w src/frontend && jest --config tests/jest.config.js",
-    "lint": "npm run lint -w src/frontend && npm run lint -w src/backend"
+    "dev": "npm run dev --workspace=src/web",
+    "dev:api": "npm run dev --workspace=src/api",
+    "build": "npm run build --workspace=src/web && npm run build --workspace=src/api",
+    "test": "npm run test --workspace=src/web",
+    "lint": "npm run lint --workspace=src/web"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.58.2"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

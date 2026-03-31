@@ -1,6 +1,6 @@
 # Squad Team
 
-> An internal developer platform with a web UI for one-click deployment of standar
+> An internal developer platform with a web UI showcasing Azure architecture patte
 
 ## Coordinator
 
@@ -13,14 +13,14 @@
 | Name | Role | Charter | Status |
 |------|------|---------|--------|
 | Danny | Lead | `.squad/agents/danny/charter.md` | ✅ Active |
-| Rusty | Backend Dev | `.squad/agents/rusty/charter.md` | ✅ Active |
-| Linus | Frontend Dev | `.squad/agents/linus/charter.md` | ✅ Active |
-| Livingston | Platform Engineer | `.squad/agents/livingston/charter.md` | ✅ Active |
+| Rusty | Frontend Dev | `.squad/agents/rusty/charter.md` | ✅ Active |
+| Linus | Backend Dev | `.squad/agents/linus/charter.md` | ✅ Active |
+| Livingston | IaC Engineer | `.squad/agents/livingston/charter.md` | ✅ Active |
 | Basher | Tester | `.squad/agents/basher/charter.md` | ✅ Active |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |
 
 ## Project Context
 
-- **Project:** An internal developer platform with a web UI for one-click deployment of standar
-- **Created:** 2026-03-30
+- **Project:** An internal developer platform with a web UI showcasing Azure architecture patte
+- **Created:** 2026-03-31
