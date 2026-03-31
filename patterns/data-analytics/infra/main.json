@@ -1,0 +1,246 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "6712342040574304777"
+    }
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Synapse workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "sqlAdminLogin": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL administrator login for the Synapse workspace."
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL administrator password for the Synapse workspace."
+      }
+    },
+    "sqlPoolSku": {
+      "type": "string",
+      "defaultValue": "DW100c",
+      "metadata": {
+        "description": "Synapse dedicated SQL pool SKU (DWU)."
+      }
+    },
+    "sparkNodeCount": {
+      "type": "int",
+      "defaultValue": 3,
+      "minValue": 3,
+      "maxValue": 200,
+      "metadata": {
+        "description": "Number of Spark nodes."
+      }
+    },
+    "sparkNodeSize": {
+      "type": "string",
+      "defaultValue": "Small",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large"
+      ],
+      "metadata": {
+        "description": "Spark node size."
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('workspaceName'))]",
+    "dataLakeName": "[take(replace(format('stdl{0}{1}', parameters('workspaceName'), variables('uniqueSuffix')), '-', ''), 24)]",
+    "synapseName": "[format('syn-{0}-{1}', parameters('workspaceName'), variables('uniqueSuffix'))]",
+    "sqlPoolName": "sqlpool01",
+    "sparkPoolName": "sparkpool01",
+    "dataFactoryName": "[format('adf-{0}-{1}', parameters('workspaceName'), variables('uniqueSuffix'))]",
+    "keyVaultName": "[take(format('kv-{0}-{1}', parameters('workspaceName'), variables('uniqueSuffix')), 24)]",
+    "dataLakeFileSystemName": "default"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('dataLakeName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "isHnsEnabled": true,
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "accessTier": "Hot"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('dataLakeName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('dataLakeName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('dataLakeName'), 'default', variables('dataLakeFileSystemName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('dataLakeName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.Synapse/workspaces",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('synapseName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "defaultDataLakeStorage": {
+          "accountUrl": "[format('https://{0}.dfs.{1}', variables('dataLakeName'), environment().suffixes.storage)]",
+          "filesystem": "[variables('dataLakeFileSystemName')]"
+        },
+        "sqlAdministratorLogin": "[parameters('sqlAdminLogin')]",
+        "sqlAdministratorLoginPassword": "[parameters('sqlAdminPassword')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataLakeName'), 'default', variables('dataLakeFileSystemName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('dataLakeName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Synapse/workspaces/firewallRules",
+      "apiVersion": "2021-06-01",
+      "name": "[format('{0}/{1}', variables('synapseName'), 'AllowAllWindowsAzureIps')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Synapse/workspaces', variables('synapseName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Synapse/workspaces/sqlPools",
+      "apiVersion": "2021-06-01",
+      "name": "[format('{0}/{1}', variables('synapseName'), variables('sqlPoolName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('sqlPoolSku')]"
+      },
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Synapse/workspaces', variables('synapseName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Synapse/workspaces/bigDataPools",
+      "apiVersion": "2021-06-01",
+      "name": "[format('{0}/{1}', variables('synapseName'), variables('sparkPoolName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "nodeCount": "[parameters('sparkNodeCount')]",
+        "nodeSizeFamily": "MemoryOptimized",
+        "nodeSize": "[parameters('sparkNodeSize')]",
+        "autoScale": {
+          "enabled": true,
+          "minNodeCount": 3,
+          "maxNodeCount": "[parameters('sparkNodeCount')]"
+        },
+        "autoPause": {
+          "enabled": true,
+          "delayInMinutes": 15
+        },
+        "sparkVersion": "3.4"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Synapse/workspaces', variables('synapseName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DataFactory/factories",
+      "apiVersion": "2018-06-01",
+      "name": "[variables('dataFactoryName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {}
+    }
+  ],
+  "outputs": {
+    "synapseWorkspaceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Synapse/workspaces', variables('synapseName'))]"
+    },
+    "synapseWorkspaceName": {
+      "type": "string",
+      "value": "[variables('synapseName')]"
+    },
+    "synapseSqlEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Synapse/workspaces', variables('synapseName')), '2021-06-01').connectivityEndpoints.sql]"
+    },
+    "synapseDevEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Synapse/workspaces', variables('synapseName')), '2021-06-01').connectivityEndpoints.dev]"
+    },
+    "dataLakeStorageId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataLakeName'))]"
+    },
+    "dataLakeStorageDfsEndpoint": {
+      "type": "string",
+      "value": "[format('https://{0}.dfs.{1}', variables('dataLakeName'), environment().suffixes.storage)]"
+    },
+    "dataFactoryId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.DataFactory/factories', variables('dataFactoryName'))]"
+    },
+    "keyVaultId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+    }
+  }
+}

@@ -24,8 +24,13 @@ export interface ArchitecturePattern {
   complexity: 'beginner' | 'intermediate' | 'advanced';
 }
 
-const deployBase =
-  'https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyour-org%2Fazure-dev-platform%2Fmain%2Fpatterns%2F';
+// ⚠️ UPDATE THIS to your GitHub org/repo before deploying
+const GITHUB_ORG = 'chrisdoofer';
+const GITHUB_REPO = 'squad-project';
+const GITHUB_BRANCH = 'main';
+
+const rawBase = `https://raw.githubusercontent.com/${GITHUB_ORG}/${GITHUB_REPO}/${GITHUB_BRANCH}/patterns/`;
+const deployBase = `https://portal.azure.com/#create/Microsoft.Template/uri/${encodeURIComponent(rawBase)}`;
 
 function patternFiles(id: string): PatternFile[] {
   return [
