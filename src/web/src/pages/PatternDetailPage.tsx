@@ -1,11 +1,14 @@
 import { useParams, Link } from 'react-router-dom';
+import Markdown from 'react-markdown';
 import { patterns } from '../data/patterns';
+import { demoContentMap } from '../data/demoContent';
 import { ServiceBadge } from '../components/ServiceBadge';
 import { DeployButton } from '../components/DeployButton';
 
 export function PatternDetailPage() {
   const { id } = useParams<{ id: string }>();
   const pattern = patterns.find((p) => p.id === id);
+  const demoContent = id ? demoContentMap[id] : undefined;
 
   if (!pattern) {
     return (
@@ -79,6 +82,15 @@ export function PatternDetailPage() {
               ))}
             </div>
           </section>
+
+          {demoContent && (
+            <section className="detail-section demo-guide-section">
+              <h2>📋 Demo Guide</h2>
+              <div className="demo-guide-content">
+                <Markdown>{demoContent}</Markdown>
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="detail-sidebar">
