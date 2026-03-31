@@ -1,0 +1,75 @@
+name: "Container Apps - Application CI/CD"
+
+# Customize: adjust paths filter to match your application source directory
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # Customize: set your ACR, Container App, and resource group names
+  ACR_NAME: "mycontainerregistry"
+  CONTAINER_APP_NAME: "my-container-app"
+  RESOURCE_GROUP: "my-container-apps-rg"
+  IMAGE_NAME: "my-app"
+
+jobs:
+  build:
+    name: Build & Push Container Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Set image tag
+        id: meta
+        run: |
+          TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "tags=${TAG}" >> $GITHUB_OUTPUT
+
+      # Customize: adjust Dockerfile path and build context
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ steps.meta.outputs.tags }} \
+            -f Dockerfile .
+
+      - name: Push to ACR
+        run: docker push ${{ steps.meta.outputs.tags }}
+
+  deploy:
+    name: Deploy to Container Apps
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Creates a new revision with the updated container image
+      - name: Update Container App revision
+        run: |
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ needs.build.outputs.image-tag }}

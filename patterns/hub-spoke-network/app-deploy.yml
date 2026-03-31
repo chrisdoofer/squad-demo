@@ -1,0 +1,80 @@
+name: "Hub-Spoke Network - Validation"
+
+# This pattern is infrastructure-only; this workflow validates network configuration
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # Customize: set your resource group and VNet names
+  RESOURCE_GROUP: "my-network-rg"
+  HUB_VNET_NAME: "hub-vnet"
+  SPOKE_VNET_NAME: "spoke-vnet"
+
+jobs:
+  validate:
+    name: Validate Network Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Validate hub VNet exists and is configured correctly
+      - name: Check Hub VNet
+        run: |
+          echo "## Hub VNet Status" >> $GITHUB_STEP_SUMMARY
+          az network vnet show \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.HUB_VNET_NAME }} \
+            --query "{Name:name, AddressSpace:addressSpace.addressPrefixes, Subnets:subnets[].name}" \
+            --output table >> $GITHUB_STEP_SUMMARY
+
+      # Validate spoke VNet exists and is configured correctly
+      - name: Check Spoke VNet
+        run: |
+          echo "## Spoke VNet Status" >> $GITHUB_STEP_SUMMARY
+          az network vnet show \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.SPOKE_VNET_NAME }} \
+            --query "{Name:name, AddressSpace:addressSpace.addressPrefixes, Subnets:subnets[].name}" \
+            --output table >> $GITHUB_STEP_SUMMARY
+
+      # Validate peering connections between hub and spokes
+      - name: Check VNet Peerings
+        run: |
+          echo "## VNet Peering Status" >> $GITHUB_STEP_SUMMARY
+          az network vnet peering list \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --vnet-name ${{ env.HUB_VNET_NAME }} \
+            --query "[].{Name:name, PeeringState:peeringState, RemoteVNet:remoteVirtualNetwork.id}" \
+            --output table >> $GITHUB_STEP_SUMMARY
+
+      # Validate NSG rules are applied
+      - name: Check Network Security Groups
+        run: |
+          echo "## NSG Status" >> $GITHUB_STEP_SUMMARY
+          az network nsg list \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "[].{Name:name, Rules:securityRules[].{Name:name,Access:access,Direction:direction}}" \
+            --output table >> $GITHUB_STEP_SUMMARY
+
+      # Validate effective routes
+      - name: Check Route Tables
+        run: |
+          echo "## Route Tables" >> $GITHUB_STEP_SUMMARY
+          az network route-table list \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "[].{Name:name, Routes:routes[].{Name:name,Prefix:addressPrefix,NextHop:nextHopType}}" \
+            --output table >> $GITHUB_STEP_SUMMARY

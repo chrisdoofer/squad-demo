@@ -1,0 +1,74 @@
+name: "Data Analytics - Infrastructure Deploy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      resourceGroupName:
+        description: "Azure Resource Group name"
+        required: true
+        type: string
+      location:
+        description: "Azure region"
+        required: true
+        type: string
+        default: "eastus2"
+      workspaceName:
+        description: "Synapse Analytics workspace name"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name ${{ inputs.resourceGroupName }} \
+            --location ${{ inputs.location }}
+
+      - name: Deploy Bicep Template
+        id: deploy
+        run: |
+          az deployment group create \
+            --resource-group ${{ inputs.resourceGroupName }} \
+            --template-file ./infra/main.bicep \
+            --parameters \
+              workspaceName=${{ inputs.workspaceName }} \
+              location=${{ inputs.location }} \
+              sqlAdminLogin=${{ secrets.SQL_ADMIN_LOGIN }} \
+              sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }} \
+            --name data-analytics-${{ github.run_number }}
+
+      - name: Output Deployment Results
+        run: |
+          echo "## Deployment Results" >> $GITHUB_STEP_SUMMARY
+          az deployment group show \
+            --resource-group ${{ inputs.resourceGroupName }} \
+            --name data-analytics-${{ github.run_number }} \
+            --query properties.outputs \
+            --output table >> $GITHUB_STEP_SUMMARY

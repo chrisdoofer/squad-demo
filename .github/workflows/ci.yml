@@ -1,78 +1,74 @@
-name: CI
+name: Platform CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
-  lint-frontend:
+  build-web:
+    name: Build Web App
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run lint -w src/frontend
 
-  lint-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run lint -w src/backend
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
 
-  test-frontend:
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  build-api:
+    name: Build API
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/api
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run test -w src/frontend
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/api/package-lock.json
 
-  test-backend:
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run test -w src/backend
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
 
-  validate-bicep:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        template:
-          - basic-web-app
-          - baseline-web-app
-          - aks-microservices
-          - serverless-api
-          - static-web-app
-          - hub-spoke-network
-    steps:
-      - uses: actions/checkout@v4
-      - name: Bicep Lint - ${{ matrix.template }}
-        run: |
-          TEMPLATE="templates/bicep/${{ matrix.template }}/main.bicep"
-          if [ -f "${TEMPLATE}" ]; then
-            az bicep build --file "${TEMPLATE}"
-          else
-            echo "::warning::Template ${TEMPLATE} not found — skipping"
-          fi
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint

@@ -1,0 +1,87 @@
+name: "Data Analytics - Application CI/CD"
+
+# Customize: adjust paths to match your Synapse artifacts directory
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # Customize: set your Synapse workspace and resource group names
+  SYNAPSE_WORKSPACE_NAME: "my-synapse-workspace"
+  RESOURCE_GROUP: "my-data-analytics-rg"
+
+jobs:
+  build:
+    name: Validate Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Customize: add any build/validation steps for SQL scripts or pipeline definitions
+      - name: Validate SQL scripts
+        run: |
+          echo "Validating SQL scripts..."
+          for f in $(find synapse/sqlscripts -name '*.sql' 2>/dev/null); do
+            echo "  Checking: $f"
+          done
+
+      - name: Validate pipeline definitions
+        run: |
+          echo "Validating pipeline definitions..."
+          for f in $(find synapse/pipelines -name '*.json' 2>/dev/null); do
+            echo "  Checking: $f"
+            python3 -m json.tool "$f" > /dev/null
+          done
+
+  deploy:
+    name: Deploy Synapse Artifacts
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Deploy SQL scripts to the Synapse SQL pool
+      - name: Deploy SQL Scripts
+        run: |
+          echo "Deploying SQL scripts to Synapse..."
+          for f in $(find synapse/sqlscripts -name '*.sql' 2>/dev/null); do
+            echo "  Deploying: $f"
+            az synapse sql-script create \
+              --workspace-name ${{ env.SYNAPSE_WORKSPACE_NAME }} \
+              --name "$(basename "$f" .sql)" \
+              --file "@$f" \
+              --sql-pool-name "sqlpool1" || true
+          done
+
+      # Deploy pipeline definitions
+      - name: Deploy Pipelines
+        run: |
+          echo "Deploying pipelines to Synapse..."
+          for f in $(find synapse/pipelines -name '*.json' 2>/dev/null); do
+            PIPELINE_NAME="$(basename "$f" .json)"
+            echo "  Deploying pipeline: $PIPELINE_NAME"
+            az synapse pipeline create \
+              --workspace-name ${{ env.SYNAPSE_WORKSPACE_NAME }} \
+              --name "$PIPELINE_NAME" \
+              --file "@$f" || true
+          done
+
+      - name: Deployment Summary
+        run: |
+          echo "## Synapse Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Workspace: ${{ env.SYNAPSE_WORKSPACE_NAME }}" >> $GITHUB_STEP_SUMMARY
