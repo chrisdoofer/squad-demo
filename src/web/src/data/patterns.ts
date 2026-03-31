@@ -26,7 +26,7 @@ export interface ArchitecturePattern {
 
 // ⚠️ UPDATE THIS to your GitHub org/repo before deploying
 const GITHUB_ORG = 'chrisdoofer';
-const GITHUB_REPO = 'squad-project';
+const GITHUB_REPO = 'squad-demo';
 const GITHUB_BRANCH = 'main';
 
 const rawBase = `https://raw.githubusercontent.com/${GITHUB_ORG}/${GITHUB_REPO}/${GITHUB_BRANCH}/patterns/`;
